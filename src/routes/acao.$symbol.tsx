@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SearchBox } from "@/components/SearchBox";
 import { findStock, formatPrice, getQuote } from "@/lib/stocks";
 import { displayName, useUser } from "@/hooks/use-session";
+import { communityAvailable } from "@/lib/backend-config";
 
 export const Route = createFileRoute("/acao/$symbol")({
   loader: ({ params }) => {
@@ -73,6 +74,7 @@ function StockPage() {
   const [replyText, setReplyText] = useState("");
 
   const load = useCallback(async () => {
+    if (!communityAvailable) return;
     const [r, p] = await Promise.all([
       supabase.from("ratings").select("user_id, stars").eq("symbol", stock.symbol),
       supabase.from("posts").select("*").eq("symbol", stock.symbol).order("created_at", { ascending: false }),
@@ -132,6 +134,7 @@ function StockPage() {
                 {up ? "+" : ""}{quote.changePct.toFixed(2)}% hoje
               </span>
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">Cotação demonstrativa — dados simulados. Integração de mercado em preparação.</p>
           </div>
           <div className="md:border-l md:border-border md:pl-8">
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Comunidade</p>
@@ -139,9 +142,9 @@ function StockPage() {
               <span className="text-3xl font-bold">{avg.toFixed(1)}</span>
               <Stars value={avg} />
             </div>
-            <p className="text-xs text-muted-foreground">{ratings.length} {ratings.length === 1 ? "avaliação" : "avaliações"}</p>
+            <p className="text-xs text-muted-foreground">{communityAvailable ? `${ratings.length} ${ratings.length === 1 ? "avaliação" : "avaliações"}` : "Avaliações em preparação"}</p>
             <div className="mt-4 text-sm">
-              {!user ? (
+              {!communityAvailable ? <p className="text-muted-foreground">Em breve você poderá avaliar esta empresa.</p> : !user ? (
                 <Link {...authLink} className="font-semibold text-primary">Entre para avaliar</Link>
               ) : (
                 <div>
@@ -171,12 +174,12 @@ function StockPage() {
                 </div>
               </form>
             ) : (
-              <p className="text-sm text-muted-foreground"><Link {...authLink} className="font-semibold text-primary">Entre</Link> para publicar e responder.</p>
+              communityAvailable ? <p className="text-sm text-muted-foreground"><Link {...authLink} className="font-semibold text-primary">Entre</Link> para publicar e responder.</p> : <p className="text-sm text-muted-foreground">Comentários e avaliações estarão disponíveis após a configuração da comunidade.</p>
             )}
           </div>
 
           <ul className="mt-6 divide-y divide-border">
-            {roots.length === 0 && <li className="py-10 text-center text-muted-foreground">Ainda não há publicações. Seja o primeiro!</li>}
+            {communityAvailable && roots.length === 0 && <li className="py-10 text-center text-muted-foreground">Ainda não há publicações. Seja o primeiro!</li>}
             {roots.map((p) => (
               <li key={p.id} className="py-5">
                 <PostItem post={p} />

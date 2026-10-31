@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { communityAvailable } from "@/lib/backend-config";
 
 export const Route = createFileRoute("/auth")({
   validateSearch: z.object({ next: z.string().optional() }),
@@ -27,6 +28,16 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (!communityAvailable) return (
+    <main className="flex min-h-screen items-center justify-center px-6">
+      <div className="max-w-md text-center">
+        <h1 className="text-2xl font-semibold">Cadastro em preparação</h1>
+        <p className="mt-3 text-muted-foreground">O login e a participação na comunidade estarão disponíveis em breve.</p>
+        <Link to="/" className="mt-6 inline-block font-semibold text-primary">Voltar à busca</Link>
+      </div>
+    </main>
+  );
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
