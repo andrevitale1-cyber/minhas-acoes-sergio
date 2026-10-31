@@ -182,7 +182,7 @@ export function normalizeTwelve(
     fetchedAt: new Date().toISOString(),
     source: "Twelve Data",
     period,
-    interval: period === "1d" ? "5m" : period === "5d" ? "30m" : "1d",
+    interval: period === "1d" ? "5m" : period === "5d" ? "30m" : period === "max" ? "1mo" : "1d",
     history: points,
     ...(quote.is_market_open === undefined ? {} : { marketOpen: quote.is_market_open }),
   };
@@ -198,6 +198,7 @@ async function handleTwelveData(symbol: string, period: Period): Promise<Respons
     "1mo": ["1day", 23],
     "6mo": ["1day", 130],
     "1y": ["1day", 260],
+    max: ["1month", 5000],
   } as const;
   const [interval, count] = config[period];
   const quoteUrl = new URL("https://api.twelvedata.com/quote");

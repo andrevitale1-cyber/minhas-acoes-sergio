@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
 import { searchStocks } from "@/lib/stocks";
+import { StockLogo } from "@/components/StockLogo";
 
 export function SearchBox({ compact = false }: { compact?: boolean }) {
   const [q, setQ] = useState("");
@@ -53,7 +54,8 @@ export function SearchBox({ compact = false }: { compact?: boolean }) {
                 onClick={() => go(s.symbol)}
                 className={`flex w-full items-center justify-between px-5 py-3 text-left ${i === active ? "bg-muted" : ""}`}
               >
-                <span>
+                <span className="flex items-center gap-3">
+                  <StockLogo symbol={s.symbol} small />
                   <span className="font-bold">{s.symbol}</span>
                   <span className="ml-3 text-muted-foreground">{s.name}</span>
                 </span>

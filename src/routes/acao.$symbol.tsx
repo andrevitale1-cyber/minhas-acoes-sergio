@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
+import { StockLogo } from "@/components/StockLogo";
 import { displayName, useUser } from "@/hooks/use-session";
 import { communityAvailable } from "@/lib/backend-config";
 
@@ -142,15 +143,13 @@ function StockPage() {
 
   const publish = async (content: string, parent_id: string | null) => {
     if (!user || !content.trim()) return;
-    await supabase
-      .from("posts")
-      .insert({
-        symbol: stock.symbol,
-        user_id: user.id,
-        author_name: displayName(user),
-        content: content.trim(),
-        parent_id,
-      });
+    await supabase.from("posts").insert({
+      symbol: stock.symbol,
+      user_id: user.id,
+      author_name: displayName(user),
+      content: content.trim(),
+      parent_id,
+    });
     load();
   };
 
@@ -187,7 +186,8 @@ function StockPage() {
         <div className="mx-auto max-w-3xl px-6 pb-4 pt-6">
           <section className="grid gap-6 rounded-3xl border border-border bg-card p-6 md:grid-cols-[1fr_auto]">
             <div>
-              <div className="flex items-baseline gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <StockLogo symbol={stock.symbol} />
                 <h1 className="text-4xl font-semibold">{stock.symbol}</h1>
                 <span className="text-muted-foreground">{stock.name}</span>
               </div>
