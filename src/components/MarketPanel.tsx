@@ -1,0 +1,141 @@
+import { lazy, Suspense, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { periods, type MarketQuote, type Period } from "@/lib/market";
+import { formatPrice } from "@/lib/stocks";
+
+const StockChart = lazy(() => import("./StockChart"));
+
+export function MarketPanel({ symbol }: { symbol: string }) {
+  const [period, setPeriod] = useState<Period>(/^[A-Z]{4}\d{1,2}$/.test(symbol) ? "1mo" : "1d");
+  const {
+    data: quote,
+    error,
+    isPending,
+    isFetching,
+    refetch,
+  } = useQuery({
+    queryKey: ["market", symbol, period],
+    queryFn: async ({ signal }): Promise<MarketQuote> => {
+      const response = await fetch(
+        `/api/market?symbol=${encodeURIComponent(symbol)}&period=${period}`,
+        { signal },
+      );
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Não foi possível carregar a cotação.");
+      return body;
+    },
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+    retry: false,
+  });
+  return (
+    <section className="mt-5" aria-label="Cotação e histórico" aria-busy={isFetching}>
+      <div role="group" aria-label="Período do gráfico" className="mb-4 flex flex-wrap gap-2">
+        {(Object.keys(periods) as Period[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={period === key}
+            onClick={() => setPeriod(key)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${period === key ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+          >
+            {periods[key].label}
+          </button>
+        ))}
+      </div>
+      {isPending && (
+        <p role="status" className="py-12 text-muted-foreground">
+          Carregando cotação e gráfico…
+        </p>
+      )}
+      {error && (
+        <div role="alert" className="rounded-xl border border-border p-4">
+          <p>{error.message}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-2 font-semibold text-primary"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      )}
+      {quote && (
+        <>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <span className="text-3xl font-bold tabular-nums">
+              {formatPrice(quote.price, quote.currency)}
+            </span>
+            {quote.change !== null && quote.changePct !== null && (
+              <span
+                className={`font-semibold tabular-nums ${quote.change >= 0 ? "text-success" : "text-destructive"}`}
+              >
+                {quote.change >= 0 ? "+" : ""}
+                {formatPrice(quote.change, quote.currency)} ({quote.changePct >= 0 ? "+" : ""}
+                {quote.changePct.toLocaleString("pt-BR", {
+                  maximumFractionDigits: 2,
+                  minimumFractionDigits: 2,
+                })}
+                %)
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Variação em relação ao fechamento anterior.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Fonte: {quote.source} ·{" "}
+            {quote.quotedAt
+              ? `Cotação em ${new Date(quote.quotedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} (Brasília)`
+              : "Horário da cotação não informado"}
+            . Dados com possível atraso conforme o plano do fornecedor.
+          </p>
+          {quote.marketOpen !== undefined && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {quote.marketOpen ? "Mercado aberto" : "Mercado fechado — última cotação disponível"}
+            </p>
+          )}
+          {quote.history.length > 1 ? (
+            <Suspense
+              fallback={
+                <p className="h-72 py-12" role="status">
+                  Preparando gráfico…
+                </p>
+              }
+            >
+              <StockChart quote={quote} />
+            </Suspense>
+          ) : (
+            <p className="py-12 text-muted-foreground">
+              {quote.historyNotice ||
+                "O fornecedor não retornou histórico suficiente para este período."}
+            </p>
+          )}
+          {quote.history.length > 1 && (
+            <p className="text-xs text-muted-foreground">
+              Histórico de{" "}
+              {new Date(quote.history[0]!.time).toLocaleDateString("pt-BR", {
+                timeZone: "America/Sao_Paulo",
+              })}{" "}
+              a{" "}
+              {new Date(quote.history.at(-1)!.time).toLocaleDateString("pt-BR", {
+                timeZone: "America/Sao_Paulo",
+              })}{" "}
+              · intervalo {quote.interval}.{" "}
+              {period === "1d" &&
+                "Linha pontilhada: fechamento anterior. Fora do pregão, exibimos os últimos dados disponíveis."}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="mt-4 text-sm font-semibold text-primary disabled:opacity-50"
+          >
+            {isFetching ? "Atualizando…" : "Atualizar cotação"}
+          </button>
+        </>
+      )}
+    </section>
+  );
+}

@@ -8,6 +8,8 @@ export function SearchBox({ compact = false }: { compact?: boolean }) {
   const [active, setActive] = useState(0);
   const navigate = useNavigate();
   const results = searchStocks(q);
+  const typedSymbol = q.trim().toUpperCase();
+  const directTicker = /^[A-Z][A-Z0-9.-]{0,14}$/.test(typedSymbol) ? typedSymbol : null;
 
   const go = (symbol: string) => {
     setQ("");
@@ -21,6 +23,7 @@ export function SearchBox({ compact = false }: { compact?: boolean }) {
           e.preventDefault();
           const pick = results[active] ?? results[0];
           if (pick) go(pick.symbol);
+          else if (directTicker) go(directTicker);
         }}
         className={`flex items-center gap-3 rounded-full border border-border bg-card text-card-foreground ${compact ? "px-4 py-2" : "px-6 py-4 shadow-search"}`}
       >
@@ -61,6 +64,15 @@ export function SearchBox({ compact = false }: { compact?: boolean }) {
             </li>
           ))}
         </ul>
+      )}
+      {results.length === 0 && directTicker && (
+        <button
+          type="button"
+          onClick={() => go(directTicker)}
+          className="absolute left-0 right-0 z-20 mt-2 rounded-2xl border border-border bg-popover px-5 py-3 text-left shadow-search"
+        >
+          Consultar {directTicker}
+        </button>
       )}
     </div>
   );
