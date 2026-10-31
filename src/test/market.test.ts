@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
 import { handleMarketRequest, normalizeQuote, normalizeTwelve } from "@/server/market.server";
+vi.mock("@/lib/market-status", () => ({ marketDataPaused: false }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
