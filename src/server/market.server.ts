@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { periods, type MarketQuote, type Period } from "@/lib/market";
+import { marketDataPaused } from "@/lib/market-status";
 
 const nullableNumber = z.number().finite().nullish();
 const quoteSchema = z.object({
@@ -58,6 +59,8 @@ function failure(message: string, status: number) {
 }
 
 export async function handleMarketRequest(request: Request): Promise<Response> {
+  if (marketDataPaused)
+    return failure("As consultas de cotações estão temporariamente pausadas.", 503);
   const params = new URL(request.url).searchParams;
   const symbol = (params.get("symbol") ?? "").toUpperCase().trim();
   const period = params.get("period") ?? "1d";

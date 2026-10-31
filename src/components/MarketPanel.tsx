@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { periods, periodReturn, type MarketQuote, type Period } from "@/lib/market";
 import { formatPrice } from "@/lib/stocks";
+import { marketDataPaused } from "@/lib/market-status";
 
 const StockChart = lazy(() => import("./StockChart"));
 
@@ -27,8 +28,15 @@ export function MarketPanel({ symbol }: { symbol: string }) {
     staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
     retry: false,
+    enabled: !marketDataPaused,
   });
   const performance = quote ? periodReturn(quote) : null;
+  if (marketDataPaused)
+    return (
+      <section className="py-6 text-sm text-muted-foreground" aria-label="Cotações pausadas">
+        As consultas de cotações e gráficos estão temporariamente pausadas.
+      </section>
+    );
   return (
     <section className="mt-5" aria-label="Cotação e histórico" aria-busy={isFetching}>
       <div role="group" aria-label="Período do gráfico" className="mb-4 flex flex-wrap gap-2">
