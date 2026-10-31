@@ -1,6 +1,10 @@
 # Dados de mercado
 
-A página consulta `/api/market?symbol=PETR4&period=1mo`. Períodos: 1d, 5d, 1mo, 6mo e 1y.
+A página consulta `/api/market?symbol=PETR4&period=1mo`. Períodos: 1d, 5d, 1mo, 6mo, 1y e max.
+
+A variação usa a cotação atual contra o primeiro fechamento disponível no histórico selecionado. Em 1D, usa o fechamento anterior. Máx. representa a variação de preço desde o primeiro ponto que o fornecedor disponibiliza, sem reinvestir dividendos. Quando não há histórico suficiente, a variação do período fica indisponível; nunca é substituída pela diária.
+
+O Fundamentei usa Aeonik. A tipografia está preparada para Aeonik quando instalada/disponível com licença; por enquanto carrega Inter como alternativa, sem copiar arquivos de terceiros. Logos usam endpoints públicos de imagens, com fallback para as iniciais do ticker.
 
 - B3: brapi. Configure `BRAPI_TOKEN` no servidor.
 - Ações dos EUA: Twelve Data. Configure `TWELVE_DATA_API_KEY` no servidor.

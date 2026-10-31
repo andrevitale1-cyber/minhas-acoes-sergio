@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { periods, type MarketQuote, type Period } from "@/lib/market";
+import { periods, periodReturn, type MarketQuote, type Period } from "@/lib/market";
 import { formatPrice } from "@/lib/stocks";
 
 const StockChart = lazy(() => import("./StockChart"));
@@ -28,6 +28,7 @@ export function MarketPanel({ symbol }: { symbol: string }) {
     refetchInterval: 5 * 60 * 1000,
     retry: false,
   });
+  const performance = quote ? periodReturn(quote) : null;
   return (
     <section className="mt-5" aria-label="Cotação e histórico" aria-busy={isFetching}>
       <div role="group" aria-label="Período do gráfico" className="mb-4 flex flex-wrap gap-2">
@@ -66,13 +67,14 @@ export function MarketPanel({ symbol }: { symbol: string }) {
             <span className="text-3xl font-bold tabular-nums">
               {formatPrice(quote.price, quote.currency)}
             </span>
-            {quote.change !== null && quote.changePct !== null && (
+            {performance && (
               <span
-                className={`font-semibold tabular-nums ${quote.change >= 0 ? "text-success" : "text-destructive"}`}
+                className={`font-semibold tabular-nums ${performance.change >= 0 ? "text-success" : "text-destructive"}`}
               >
-                {quote.change >= 0 ? "+" : ""}
-                {formatPrice(quote.change, quote.currency)} ({quote.changePct >= 0 ? "+" : ""}
-                {quote.changePct.toLocaleString("pt-BR", {
+                {performance.change >= 0 ? "+" : ""}
+                {formatPrice(performance.change, quote.currency)} (
+                {performance.changePct >= 0 ? "+" : ""}
+                {performance.changePct.toLocaleString("pt-BR", {
                   maximumFractionDigits: 2,
                   minimumFractionDigits: 2,
                 })}
@@ -81,7 +83,12 @@ export function MarketPanel({ symbol }: { symbol: string }) {
             )}
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            Variação em relação ao fechamento anterior.
+            {period === "1d"
+              ? "Variação em relação ao fechamento anterior."
+              : performance
+                ? `Variação desde ${new Date(quote.history[0]!.time).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}, primeiro preço disponível ${period === "max" ? "em todo o histórico liberado pela API" : "no período selecionado"}.`
+                : "Variação do período indisponível sem histórico suficiente."}
+            {period === "max" && " Variação de preço, sem reinvestimento de dividendos."}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             Fonte: {quote.source} ·{" "}

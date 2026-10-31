@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { MarketQuote } from "@/lib/market";
+import { periodReturn, type MarketQuote } from "@/lib/market";
 import { formatPrice } from "@/lib/stocks";
 
 export default function StockChart({ quote }: { quote: MarketQuote }) {
@@ -18,13 +18,12 @@ export default function StockChart({ quote }: { quote: MarketQuote }) {
       timeZone: "America/Sao_Paulo",
       ...(intraday ? { hour: "2-digit", minute: "2-digit" } : {}),
       ...(!intraday || full ? { day: "2-digit", month: "2-digit" } : {}),
+      ...(quote.period === "max" ? { year: "numeric" } : {}),
     }).format(value);
   const first = quote.history[0]?.price ?? quote.price;
   const last = quote.history.at(-1)?.price ?? quote.price;
-  const color =
-    last >= (quote.period === "1d" ? (quote.previousClose ?? first) : first)
-      ? "#15803d"
-      : "#dc2626";
+  const performance = periodReturn(quote);
+  const color = (performance?.change ?? 0) >= 0 ? "#15803d" : "#dc2626";
   return (
     <div
       className="h-72 w-full"
