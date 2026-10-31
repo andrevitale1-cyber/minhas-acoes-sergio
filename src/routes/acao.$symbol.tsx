@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { Star, MessageCircle, LogOut } from "lucide-react";
+import { Star, MessageCircle, LogOut, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
@@ -184,14 +184,20 @@ function StockPage() {
           </div>
         </header>
         <div className="mx-auto max-w-3xl px-6 pb-4 pt-6">
+          <Link
+            to="/"
+            className="mb-4 inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-primary hover:bg-secondary"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Voltar à busca
+          </Link>
           <section className="grid gap-6 rounded-3xl border border-border bg-card p-6 md:grid-cols-[1fr_auto]">
             <div>
               <div className="flex flex-wrap items-center gap-3">
                 <StockLogo symbol={stock.symbol} />
                 <h1 className="text-4xl font-semibold">{stock.symbol}</h1>
-                <span className="text-muted-foreground">{stock.name}</span>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
+                {stock.name} ·{" "}
                 {stock.market === "BR" ? "B3 · Brasil · BRL" : "Estados Unidos · USD"}
               </p>
             </div>
