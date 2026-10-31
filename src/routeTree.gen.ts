@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AcaoSymbolRouteImport } from './routes/acao.$symbol'
+import { Route as ApiMarketRouteImport } from './routes/api.market'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -28,35 +29,44 @@ const AcaoSymbolRoute = AcaoSymbolRouteImport.update({
   path: '/acao/$symbol',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMarketRoute = ApiMarketRouteImport.update({
+  id: '/api/market',
+  path: '/api/market',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/market': typeof ApiMarketRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/market': typeof ApiMarketRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/market': typeof ApiMarketRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/acao/$symbol'
+  fullPaths: '/' | '/auth' | '/acao/$symbol' | '/api/market'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/acao/$symbol'
-  id: '__root__' | '/' | '/auth' | '/acao/$symbol'
+  to: '/' | '/auth' | '/acao/$symbol' | '/api/market'
+  id: '__root__' | '/' | '/auth' | '/acao/$symbol' | '/api/market'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   AcaoSymbolRoute: typeof AcaoSymbolRoute
+  ApiMarketRoute: typeof ApiMarketRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -82,6 +92,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcaoSymbolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/market': {
+      id: '/api/market'
+      path: '/api/market'
+      fullPath: '/api/market'
+      preLoaderRoute: typeof ApiMarketRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   AcaoSymbolRoute: AcaoSymbolRoute,
+  ApiMarketRoute: ApiMarketRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
