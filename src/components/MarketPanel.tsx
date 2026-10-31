@@ -91,11 +91,9 @@ export function MarketPanel({ symbol }: { symbol: string }) {
             {period === "max" && " Variação de preço, sem reinvestimento de dividendos."}
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Fonte: {quote.source} ·{" "}
             {quote.quotedAt
               ? `Cotação em ${new Date(quote.quotedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} (Brasília)`
               : "Horário da cotação não informado"}
-            . Dados com possível atraso conforme o plano do fornecedor.
           </p>
           {quote.marketOpen !== undefined && (
             <p className="mt-1 text-xs text-muted-foreground">
