@@ -1,86 +1,40 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { SignIn, SignUp } from "@clerk/tanstack-react-start";
 import { z } from "zod";
-import { supabase } from "@/integrations/supabase/client";
 import { communityAvailable } from "@/lib/backend-config";
-
 export const Route = createFileRoute("/auth")({
-  validateSearch: z.object({ next: z.string().optional() }),
-  head: () => ({
-    meta: [
-      { title: "Entrar — Minhas Ações" },
-      { name: "description", content: "Entre com seu e-mail para avaliar e publicar sobre ações." },
-      { property: "og:title", content: "Entrar — Minhas Ações" },
-      { property: "og:description", content: "Entre para participar da comunidade." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-  }),
+  validateSearch: z.object({ next: z.string().optional(), mode: z.enum(["in", "up"]).optional() }),
+  head: () => ({ meta: [{ title: "Entrar — Minhas Ações" }] }),
   component: AuthPage,
 });
-
 function AuthPage() {
-  const { next } = Route.useSearch();
-  const safeNext = next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
-  const navigate = useNavigate();
-  const [mode, setMode] = useState<"in" | "up">("in");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  if (!communityAvailable) return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="max-w-md text-center">
-        <h1 className="text-2xl font-semibold">Cadastro em preparação</h1>
-        <p className="mt-3 text-muted-foreground">O login e a participação na comunidade estarão disponíveis em breve.</p>
-        <Link to="/" className="mt-6 inline-block font-semibold text-primary">Voltar à busca</Link>
-      </div>
-    </main>
-  );
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setMsg(null);
-    if (mode === "in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMsg("E-mail ou senha inválidos.");
-      else navigate({ to: safeNext });
-    } else {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: window.location.origin + safeNext },
-      });
-      setMsg(error ? error.message : "Conta criada! Confirme pelo link enviado ao seu e-mail.");
-    }
-    setLoading(false);
-  };
-
+  const { next, mode } = Route.useSearch();
+  const safeNext = next && /^\/(?![\\/])/.test(next) ? next : "/";
   return (
-    <main className="bg-hero flex min-h-screen items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-3xl bg-card p-8 text-card-foreground shadow-search">
-        <Link to="/" className="font-display text-2xl font-semibold">
-          Minhas <span className="italic text-primary">Ações</span>
-        </Link>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {mode === "in" ? "Entre para avaliar e publicar." : "Crie sua conta com e-mail."}
-        </p>
-        <form onSubmit={submit} className="mt-6 space-y-3">
-          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com"
-            className="w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring" />
-          <input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Senha"
-            className="w-full rounded-xl border border-input bg-background px-4 py-3 outline-none focus:border-ring" />
-          <button disabled={loading} className="w-full rounded-xl bg-primary py-3 font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50">
-            {mode === "in" ? "Entrar" : "Criar conta"}
-          </button>
-        </form>
-        {msg && <p className="mt-4 text-sm text-muted-foreground">{msg}</p>}
-        <button onClick={() => setMode(mode === "in" ? "up" : "in")} className="mt-6 text-sm font-semibold text-primary">
-          {mode === "in" ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
-        </button>
-      </div>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-10">
+      <Link to="/" className="font-display text-2xl font-semibold">
+        Minhas Ações
+      </Link>
+      {communityAvailable ? (
+        mode === "up" ? (
+          <SignUp
+            routing="hash"
+            signInUrl={`/auth?next=${encodeURIComponent(safeNext)}`}
+            forceRedirectUrl={safeNext}
+          />
+        ) : (
+          <SignIn
+            routing="hash"
+            signUpUrl={`/auth?mode=up&next=${encodeURIComponent(safeNext)}`}
+            forceRedirectUrl={safeNext}
+          />
+        )
+      ) : (
+        <p>O cadastro está em preparação.</p>
+      )}
+      <Link to="/" className="text-sm font-semibold text-primary">
+        Voltar à busca
+      </Link>
     </main>
   );
 }
