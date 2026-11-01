@@ -7,6 +7,8 @@ export type CommunityPost = {
   image_url: null;
   is_sergio: boolean;
   can_delete: boolean;
+  can_pin: boolean;
+  is_pinned: boolean;
 };
 export type CommunityData = {
   posts: CommunityPost[];

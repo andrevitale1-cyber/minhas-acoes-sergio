@@ -25,3 +25,7 @@ Aplicar migrações com `node --env-file=.env.local scripts/migrate-db.mjs`. O r
 A leitura é pública; escrever exige sessão Clerk válida. Uma nota de 1 a 5 por usuário e empresa, atualizada ao votar novamente. Comentários aceitam até 2.000 caracteres e respostas de um nível. Autores podem excluir suas publicações; Sérgio pode moderar. Exclusão é lógica. Publicações do Sérgio aparecem primeiro e recebem identificação. Limite de 60 ações por usuário por hora.
 
 As APIs de cotações continuam pausadas em `src/lib/market-status.ts`, conforme solicitado. A comunidade funciona independentemente delas.
+
+O usuário do Sérgio (`sergionetominhasacoes@gmail.com`) já está vinculado pelo `SERGIO_CLERK_USER_ID` verificado no Clerk. Ele pode fixar/desafixar comentários e respostas de qualquer autor e excluir publicações de terceiros. Conversas com comentários fixados aparecem primeiro. A autorização é conferida no servidor.
+
+O editor de comentários e respostas oferece negrito, itálico, sublinhado, três tamanhos de texto, listas, citações e prévia. Armazena texto com marcadores, mantendo o limite de 2.000 caracteres. O renderizador usa elementos React permitidos e nunca interpreta HTML fornecido pelo usuário.

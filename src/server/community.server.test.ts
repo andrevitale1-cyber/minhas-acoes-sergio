@@ -17,7 +17,60 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("DATABASE_URL", "configured");
   vi.stubEnv("CLERK_SECRET_KEY", "configured");
+  vi.stubEnv("SERGIO_CLERK_USER_ID", "user_sergio");
   mocks.auth.mockResolvedValue({ userId: "user_real" });
+});
+it("rejects pinning by other users, including forged moderator fields", async () => {
+  const response = await handleCommunity(
+    request({
+      action: "pin",
+      id: "e8214cd4-18b1-4e83-a42a-0f401c76bfa5",
+      pinned: true,
+      is_sergio: true,
+    }),
+  );
+  expect(response.status).toBe(403);
+  expect(mocks.sql).not.toHaveBeenCalled();
+});
+it.each([true, false])("allows Sérgio to set pinned=%s", async (pinned) => {
+  mocks.auth.mockResolvedValue({ userId: "user_sergio" });
+  mocks.sql
+    .mockResolvedValueOnce([{ requests: 1 }])
+    .mockResolvedValueOnce([{ id: "post" }])
+    .mockResolvedValueOnce([{ average: 0, count: 0 }])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([]);
+  expect(
+    (
+      await handleCommunity(
+        request({ action: "pin", id: "e8214cd4-18b1-4e83-a42a-0f401c76bfa5", pinned }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(mocks.sql.mock.calls[1]?.[1]).toEqual(pinned ? expect.any(Date) : null);
+});
+it("allows Sérgio to moderate another author's comment", async () => {
+  mocks.auth.mockResolvedValue({ userId: "user_sergio" });
+  mocks.sql
+    .mockResolvedValueOnce([{ requests: 1 }])
+    .mockResolvedValueOnce([{ id: "post" }])
+    .mockResolvedValueOnce([{ average: 0, count: 0 }])
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([]);
+  expect(
+    (
+      await handleCommunity(
+        request({ action: "delete", id: "e8214cd4-18b1-4e83-a42a-0f401c76bfa5" }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(mocks.sql.mock.calls[1]?.slice(1)).toEqual([
+    "e8214cd4-18b1-4e83-a42a-0f401c76bfa5",
+    "BR",
+    "ITUB4",
+    "user_sergio",
+    true,
+  ]);
 });
 it("rejects cross-site writes before consulting authentication or the database", async () => {
   expect(

@@ -10,6 +10,7 @@ export const communityActionSchema = z.discriminatedUnion("action", [
     parent_id: z.string().uuid().nullable(),
   }),
   z.object({ action: z.literal("delete"), id: z.string().uuid() }),
+  z.object({ action: z.literal("pin"), id: z.string().uuid(), pinned: z.boolean() }),
 ]);
 export function validWriteOrigin(request: Request) {
   const origin = request.headers.get("Origin");
@@ -55,6 +56,8 @@ export async function handleCommunity(request: Request): Promise<Response> {
           { error: "Verifique os dados: notas de 1 a 5 e textos de até 2.000 caracteres." },
           400,
         );
+      if (parsed.data.action === "pin" && userId !== sergioId)
+        return json({ error: "Somente o Sérgio pode fixar comentários." }, 403);
       const [rateLimit] =
         await db`INSERT INTO community_rate_limits (user_id, window_start, requests) VALUES (${userId}, date_trunc('hour', now()), 1) ON CONFLICT (user_id, window_start) DO UPDATE SET requests = community_rate_limits.requests + 1 WHERE community_rate_limits.requests < 60 RETURNING requests`;
       if (!rateLimit)
@@ -78,6 +81,10 @@ export async function handleCommunity(request: Request): Promise<Response> {
           profile.username ||
           "Investidor";
         await db`INSERT INTO posts (market, symbol, user_id, author_name, content, parent_id) VALUES (${market}, ${symbol}, ${userId}, ${author.slice(0, 100)}, ${action.content}, ${action.parent_id})`;
+      } else if (action.action === "pin") {
+        const [pinned] =
+          await db`UPDATE posts SET pinned_at = ${action.pinned ? new Date() : null} WHERE id = ${action.id} AND market = ${market} AND symbol = ${symbol} AND hidden_at IS NULL RETURNING id`;
+        if (!pinned) return json({ error: "Publicação não encontrada." }, 404);
       } else {
         const [deleted] =
           await db`UPDATE posts SET hidden_at = now() WHERE id = ${action.id} AND market = ${market} AND symbol = ${symbol} AND hidden_at IS NULL AND (user_id = ${userId} OR ${userId === sergioId}) RETURNING id`;
@@ -89,11 +96,11 @@ export async function handleCommunity(request: Request): Promise<Response> {
       userId
         ? db`SELECT stars FROM ratings WHERE market = ${market} AND symbol = ${symbol} AND user_id = ${userId}`
         : [],
-      db`SELECT id FROM posts WHERE market = ${market} AND symbol = ${symbol} AND parent_id IS NULL AND hidden_at IS NULL ORDER BY (user_id = ${sergioId}) DESC, created_at DESC, id DESC LIMIT 21 OFFSET ${page * 20}`,
+      db`SELECT id FROM posts p WHERE market = ${market} AND symbol = ${symbol} AND parent_id IS NULL AND hidden_at IS NULL ORDER BY (pinned_at IS NOT NULL OR EXISTS (SELECT 1 FROM posts r WHERE r.parent_id = p.id AND r.pinned_at IS NOT NULL AND r.hidden_at IS NULL)) DESC, (user_id = ${sergioId}) DESC, created_at DESC, id DESC LIMIT 21 OFFSET ${page * 20}`,
     ]);
     const ids = roots.slice(0, 20).map((root) => root["id"]);
     const posts = ids.length
-      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ${sergioId}) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${userId !== null && userId === sergioId})) AS can_delete, NULL AS image_url FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY (user_id = ${sergioId}) DESC, created_at DESC, id DESC LIMIT 500`
+      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ${sergioId}) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${userId !== null && userId === sergioId})) AS can_delete, ${userId !== null && userId === sergioId}::boolean AS can_pin, (pinned_at IS NOT NULL) AS is_pinned, NULL AS image_url FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY array_position(${ids}::uuid[], coalesce(parent_id, id)), (pinned_at IS NOT NULL) DESC, created_at DESC, id DESC LIMIT 500`
       : [];
     return json({
       posts,
