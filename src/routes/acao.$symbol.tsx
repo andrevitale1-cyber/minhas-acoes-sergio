@@ -4,6 +4,8 @@ import { Star, MessageCircle, LogOut, ArrowLeft } from "lucide-react";
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
+import { CommentEditor } from "@/components/CommentEditor";
+import { CommentText } from "@/components/CommentText";
 import { StockLogo } from "@/components/StockLogo";
 import { useUser, useSignOut } from "@/hooks/use-session";
 import { communityRequest, type CommunityData, type CommunityPost as Post } from "@/lib/community";
@@ -164,7 +166,13 @@ function StockPage() {
   };
 
   const roots = posts.filter((p) => !p.parent_id);
-  const replies = (id: string) => posts.filter((p) => p.parent_id === id).reverse();
+  const replies = (id: string) =>
+    posts
+      .filter((p) => p.parent_id === id)
+      .sort(
+        (a, b) =>
+          Number(b.is_pinned) - Number(a.is_pinned) || a.created_at.localeCompare(b.created_at),
+      );
   const authLink = { to: "/auth" as const, search: { next: `/acao/${stock.symbol}` } };
 
   return (
@@ -273,13 +281,10 @@ function StockPage() {
                   if (await publish(text, null)) setText("");
                 }}
               >
-                <textarea
+                <CommentEditor
                   value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  maxLength={2000}
-                  rows={3}
+                  onChange={setText}
                   placeholder={`O que está acontecendo com ${stock.symbol}?`}
-                  className="w-full resize-none bg-transparent outline-none placeholder:text-muted-foreground"
                 />
                 <div className="flex justify-end">
                   <button
@@ -313,15 +318,22 @@ function StockPage() {
             {roots.map((p) => (
               <li
                 key={p.id}
-                className={`py-5 ${p.is_sergio ? "rounded-2xl bg-accent/10 px-4" : ""}`}
+                className={`py-5 ${p.is_sergio || p.is_pinned ? "rounded-2xl bg-accent/10 px-4" : ""}`}
               >
-                <PostItem post={p} onDelete={() => mutate({ action: "delete", id: p.id })} />
+                <PostItem
+                  post={p}
+                  busy={busy}
+                  onPin={() => mutate({ action: "pin", id: p.id, pinned: !p.is_pinned })}
+                  onDelete={() => mutate({ action: "delete", id: p.id })}
+                />
                 <div className="ml-11 mt-2">
                   {replies(p.id).map((r) => (
                     <div key={r.id} className="mt-3 border-l-2 border-border pl-4">
                       <PostItem
                         post={r}
                         small
+                        busy={busy}
+                        onPin={() => mutate({ action: "pin", id: r.id, pinned: !r.is_pinned })}
                         onDelete={() => mutate({ action: "delete", id: r.id })}
                       />
                     </div>
@@ -335,7 +347,7 @@ function StockPage() {
                     </Link>
                   ) : replyTo === p.id ? (
                     <form
-                      className="mt-3 flex gap-2"
+                      className="mt-3 flex flex-col items-start gap-2"
                       onSubmit={async (e) => {
                         e.preventDefault();
                         if (await publish(replyText, p.id)) {
@@ -344,14 +356,14 @@ function StockPage() {
                         }
                       }}
                     >
-                      <input
-                        autoFocus
-                        value={replyText}
-                        maxLength={2000}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        placeholder={`Responder a ${p.author_name}…`}
-                        className="flex-1 rounded-full border border-input bg-background px-4 py-2 text-sm outline-none"
-                      />
+                      <div className="w-full">
+                        <CommentEditor
+                          autoFocus
+                          value={replyText}
+                          onChange={setReplyText}
+                          placeholder={`Responder a ${p.author_name}…`}
+                        />
+                      </div>
                       <button
                         disabled={busy || !replyText.trim()}
                         className="rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-40"
@@ -391,10 +403,14 @@ function PostItem({
   post,
   small,
   onDelete,
+  onPin,
+  busy,
 }: {
   post: Post;
   small?: boolean;
   onDelete: () => Promise<boolean>;
+  onPin: () => Promise<boolean>;
+  busy: boolean;
 }) {
   return (
     <div className="flex gap-3">
@@ -413,12 +429,26 @@ function PostItem({
           )}{" "}
           <span className="text-muted-foreground">· {timeAgo(post.created_at)}</span>
         </p>
-        <p className={`mt-1 whitespace-pre-wrap break-words ${small ? "text-sm" : ""}`}>
-          {post.content}
-        </p>
+        {post.is_pinned && (
+          <p className="mt-1 text-xs font-semibold text-primary">📌 Fixado pelo Sérgio</p>
+        )}
+        <div className={`mt-2 ${small ? "text-sm" : ""}`}>
+          <CommentText text={post.content} />
+        </div>
+        {post.can_pin && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onPin()}
+            className="mr-4 mt-2 text-xs font-semibold text-primary disabled:opacity-40"
+          >
+            {post.is_pinned ? "Desafixar" : "Fixar comentário"}
+          </button>
+        )}
         {post.can_delete && (
           <button
             type="button"
+            disabled={busy}
             onClick={() => onDelete()}
             className="mt-2 text-xs text-muted-foreground hover:text-destructive"
           >

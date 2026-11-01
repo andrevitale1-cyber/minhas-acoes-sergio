@@ -5,7 +5,7 @@ const sql = postgres(process.env.DATABASE_URL, { ssl: "require", max: 1, prepare
 try {
   await sql.begin(async (tx) => {
     await tx`CREATE TABLE IF NOT EXISTS app_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
-    for (const name of ["render-inicial", "render-community"]) {
+    for (const name of ["render-inicial", "render-community", "render-pinned-posts"]) {
       const applied = await tx`SELECT name FROM app_migrations WHERE name = ${name}`;
       if (applied.length) continue;
       await tx.unsafe(await readFile(new URL(`../drizzle/${name}.sql`, import.meta.url), "utf8"));
