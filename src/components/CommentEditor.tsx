@@ -53,7 +53,7 @@ export function CommentEditor({
       <div
         role="toolbar"
         aria-label="Formatação do comentário"
-        className="flex flex-wrap items-center gap-1 border-b border-border p-2"
+        className="flex flex-wrap items-center gap-0.5 border-b border-border p-1.5 sm:gap-1 sm:p-2"
       >
         {tools.map((tool) => (
           <button
@@ -62,7 +62,7 @@ export function CommentEditor({
             title={tool.label}
             aria-label={tool.label}
             onClick={() => format(tool.marker, tool.block)}
-            className={`rounded px-3 py-2 text-sm hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tool.className || ""}`}
+            className={`min-h-10 rounded px-2.5 py-2 text-sm hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tool.className || ""}`}
           >
             {tool.text}
           </button>
@@ -94,11 +94,11 @@ export function CommentEditor({
         aria-label={placeholder}
         aria-describedby={helpId}
         placeholder={placeholder}
-        className="w-full resize-y bg-transparent p-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        className="w-full resize-y bg-transparent p-3 text-base outline-none sm:text-sm focus-visible:ring-2 focus-visible:ring-primary"
       />
       <div
         id={helpId}
-        className="flex justify-between gap-2 px-3 pb-2 text-xs text-muted-foreground"
+        className="flex flex-wrap justify-between gap-2 px-3 pb-2 text-xs text-muted-foreground"
       >
         <span>Selecione o texto para formatar.</span>
         <span>{value.length}/2000</span>

@@ -43,9 +43,9 @@ export function CommentText({ text }: { text: string }) {
           );
         if (line.startsWith("- "))
           return (
-            <div key={i} className="flex gap-2">
+            <div key={i} className="flex min-w-0 gap-2">
               <span aria-hidden="true">•</span>
-              <p>{inline(line.slice(2))}</p>
+              <p className="min-w-0">{inline(line.slice(2))}</p>
             </div>
           );
         return <p key={i}>{line ? inline(line) : <br />}</p>;
