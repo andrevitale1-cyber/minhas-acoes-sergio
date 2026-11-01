@@ -1,12 +1,12 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Star, MessageCircle, LogOut, ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
 import { StockLogo } from "@/components/StockLogo";
-import { displayName, useUser } from "@/hooks/use-session";
+import { useUser, useSignOut } from "@/hooks/use-session";
+import { communityRequest, type CommunityData, type CommunityPost as Post } from "@/lib/community";
 import { communityAvailable } from "@/lib/backend-config";
 
 export const Route = createFileRoute("/acao/$symbol")({
@@ -45,18 +45,13 @@ export const Route = createFileRoute("/acao/$symbol")({
       </Link>
     </div>
   ),
-  component: StockPage,
+  component: StockRoute,
 });
 
-type Post = {
-  id: string;
-  user_id: string;
-  author_name: string;
-  content: string;
-  parent_id: string | null;
-  created_at: string;
-  image_url: string | null;
-};
+function StockRoute() {
+  const { stock } = Route.useLoaderData();
+  return <StockPage key={stock.symbol} />;
+}
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -102,55 +97,70 @@ function Stars({
 function StockPage() {
   const { stock } = Route.useLoaderData();
   const user = useUser();
+  const signOut = useSignOut();
 
-  const [ratings, setRatings] = useState<{ user_id: string; stars: number }[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [community, setCommunity] = useState<CommunityData>({
+    posts: [],
+    average: 0,
+    count: 0,
+    mine: null,
+    hasMore: false,
+  });
+  const [page, setPage] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const requestVersion = useRef(0);
   const [text, setText] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
 
-  const load = useCallback(async () => {
-    if (!communityAvailable) return;
-    const [r, p] = await Promise.all([
-      supabase.from("ratings").select("user_id, stars").eq("symbol", stock.symbol),
-      supabase
-        .from("posts")
-        .select("*")
-        .eq("symbol", stock.symbol)
-        .order("created_at", { ascending: false }),
-    ]);
-    setRatings(r.data ?? []);
-    setPosts((p.data as Post[]) ?? []);
-  }, [stock.symbol]);
-
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!communityAvailable) return;
+    const version = ++requestVersion.current;
+    communityRequest(stock.symbol, "GET", undefined, page).then(
+      (data) => {
+        if (version === requestVersion.current) {
+          setCommunity(data);
+          setError(null);
+        }
+      },
+      (err) => {
+        if (version === requestVersion.current)
+          setError(err instanceof Error ? err.message : "Não foi possível carregar a comunidade.");
+      },
+    );
+    return () => {
+      requestVersion.current++;
+    };
+  }, [stock.symbol, user?.id, page]);
 
-  const avg = ratings.length ? ratings.reduce((a, r) => a + r.stars, 0) / ratings.length : 0;
-  const mine = user ? ratings.find((r) => r.user_id === user.id) : undefined;
+  const avg = community.average;
+  const mine = community.mine;
+  const posts = community.posts;
 
+  const mutate = async (data: unknown) => {
+    if (!user || busy) return false;
+    const version = ++requestVersion.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await communityRequest(stock.symbol, "POST", data, page);
+      if (version === requestVersion.current) setCommunity(updated);
+      return true;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível salvar.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
   const rate = async (n: number) => {
-    if (!user) return;
-    await supabase
-      .from("ratings")
-      .upsert(
-        { symbol: stock.symbol, user_id: user.id, stars: n },
-        { onConflict: "symbol,user_id" },
-      );
-    load();
+    await mutate({ action: "rate", stars: n });
   };
 
   const publish = async (content: string, parent_id: string | null) => {
-    if (!user || !content.trim()) return;
-    await supabase.from("posts").insert({
-      symbol: stock.symbol,
-      user_id: user.id,
-      author_name: displayName(user),
-      content: content.trim(),
-      parent_id,
-    });
-    load();
+    if (!content.trim()) return false;
+    return mutate({ action: "post", content: content.trim(), parent_id });
   };
 
   const roots = posts.filter((p) => !p.parent_id);
@@ -170,7 +180,7 @@ function StockPage() {
             </div>
             {user ? (
               <button
-                onClick={() => supabase.auth.signOut()}
+                onClick={() => signOut()}
                 aria-label="Sair"
                 className="text-slate hover:text-accent"
               >
@@ -211,7 +221,7 @@ function StockPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 {communityAvailable
-                  ? `${ratings.length} ${ratings.length === 1 ? "avaliação" : "avaliações"}`
+                  ? `${community.count} ${community.count === 1 ? "avaliação" : "avaliações"}`
                   : "Avaliações em preparação"}
               </p>
               <div className="mt-4 text-sm">
@@ -228,7 +238,7 @@ function StockPage() {
                     <p className="mb-1 text-muted-foreground">
                       {mine ? "Sua nota" : "Dê sua nota"}
                     </p>
-                    <Stars value={mine?.stars ?? 0} onPick={rate} size={22} />
+                    <Stars value={mine ?? 0} onPick={rate} size={22} />
                   </div>
                 )}
               </div>
@@ -241,6 +251,14 @@ function StockPage() {
       </div>
 
       <main className="mx-auto max-w-3xl px-6 pb-10">
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-destructive/40 p-4 text-sm text-destructive"
+          >
+            {error}
+          </p>
+        )}
         <section className="mt-6">
           <h2 className="text-2xl font-semibold">O que estão dizendo sobre {stock.symbol}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -250,10 +268,9 @@ function StockPage() {
           <div className="mt-6 rounded-2xl border border-border bg-card p-4">
             {user ? (
               <form
-                onSubmit={(e) => {
+                onSubmit={async (e) => {
                   e.preventDefault();
-                  publish(text, null);
-                  setText("");
+                  if (await publish(text, null)) setText("");
                 }}
               >
                 <textarea
@@ -266,7 +283,7 @@ function StockPage() {
                 />
                 <div className="flex justify-end">
                   <button
-                    disabled={!text.trim()}
+                    disabled={busy || !text.trim()}
                     className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
                   >
                     Publicar
@@ -288,18 +305,25 @@ function StockPage() {
           </div>
 
           <ul className="mt-6 divide-y divide-border">
-            {communityAvailable && roots.length === 0 && (
+            {communityAvailable && !error && roots.length === 0 && (
               <li className="py-10 text-center text-muted-foreground">
                 Ainda não há publicações. Seja o primeiro!
               </li>
             )}
             {roots.map((p) => (
-              <li key={p.id} className="py-5">
-                <PostItem post={p} />
+              <li
+                key={p.id}
+                className={`py-5 ${p.is_sergio ? "rounded-2xl bg-accent/10 px-4" : ""}`}
+              >
+                <PostItem post={p} onDelete={() => mutate({ action: "delete", id: p.id })} />
                 <div className="ml-11 mt-2">
                   {replies(p.id).map((r) => (
                     <div key={r.id} className="mt-3 border-l-2 border-border pl-4">
-                      <PostItem post={r} small />
+                      <PostItem
+                        post={r}
+                        small
+                        onDelete={() => mutate({ action: "delete", id: r.id })}
+                      />
                     </div>
                   ))}
                   {!user ? (
@@ -312,22 +336,24 @@ function StockPage() {
                   ) : replyTo === p.id ? (
                     <form
                       className="mt-3 flex gap-2"
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
-                        publish(replyText, p.id);
-                        setReplyText("");
-                        setReplyTo(null);
+                        if (await publish(replyText, p.id)) {
+                          setReplyText("");
+                          setReplyTo(null);
+                        }
                       }}
                     >
                       <input
                         autoFocus
                         value={replyText}
+                        maxLength={2000}
                         onChange={(e) => setReplyText(e.target.value)}
                         placeholder={`Responder a ${p.author_name}…`}
                         className="flex-1 rounded-full border border-input bg-background px-4 py-2 text-sm outline-none"
                       />
                       <button
-                        disabled={!replyText.trim()}
+                        disabled={busy || !replyText.trim()}
                         className="rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-40"
                       >
                         Responder
@@ -349,13 +375,27 @@ function StockPage() {
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex gap-4 text-sm font-semibold text-primary">
+            {page > 0 && <button onClick={() => setPage(page - 1)}>Publicações anteriores</button>}
+            {community.hasMore && (
+              <button onClick={() => setPage(page + 1)}>Mais publicações</button>
+            )}
+          </div>
         </section>
       </main>
     </div>
   );
 }
 
-function PostItem({ post, small }: { post: Post; small?: boolean }) {
+function PostItem({
+  post,
+  small,
+  onDelete,
+}: {
+  post: Post;
+  small?: boolean;
+  onDelete: () => Promise<boolean>;
+}) {
   return (
     <div className="flex gap-3">
       <div
@@ -366,11 +406,25 @@ function PostItem({ post, small }: { post: Post; small?: boolean }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm">
           <span className="font-bold">{post.author_name}</span>{" "}
+          {post.is_sergio && (
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-semibold text-accent-foreground">
+              Sérgio · Autor
+            </span>
+          )}{" "}
           <span className="text-muted-foreground">· {timeAgo(post.created_at)}</span>
         </p>
         <p className={`mt-1 whitespace-pre-wrap break-words ${small ? "text-sm" : ""}`}>
           {post.content}
         </p>
+        {post.can_delete && (
+          <button
+            type="button"
+            onClick={() => onDelete()}
+            className="mt-2 text-xs text-muted-foreground hover:text-destructive"
+          >
+            Excluir publicação
+          </button>
+        )}
         {post.image_url && (
           <img
             src={post.image_url}
