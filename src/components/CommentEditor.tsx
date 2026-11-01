@@ -1,4 +1,5 @@
 import { useId, useRef } from "react";
+import { Bold, Italic, Underline, List, Quote } from "lucide-react";
 import { CommentText } from "./CommentText";
 
 export function CommentEditor({
@@ -42,18 +43,30 @@ export function CommentEditor({
     });
   }
   const tools = [
-    { label: "Negrito", text: "N", marker: "**", className: "font-bold" },
-    { label: "Itálico", text: "I", marker: "*", className: "italic" },
-    { label: "Sublinhado", text: "S", marker: "__", className: "underline" },
-    { label: "Lista", text: "• Lista", marker: "- ", block: true },
-    { label: "Citação", text: "❝ Citação", marker: "> ", block: true },
+    { label: "Negrito", icon: Bold, marker: "**" },
+    { label: "Itálico", icon: Italic, marker: "*" },
+    { label: "Sublinhado", icon: Underline, marker: "__" },
+    { label: "Lista", icon: List, marker: "- ", block: true },
+    { label: "Citação", icon: Quote, marker: "> ", block: true },
   ];
   return (
-    <div className="min-w-0 flex-1 rounded-xl border border-input bg-background">
+    <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-card transition-shadow focus-within:border-primary/35 focus-within:ring-2 focus-within:ring-primary/5">
+      <textarea
+        ref={input}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        maxLength={2000}
+        rows={3}
+        autoFocus={autoFocus}
+        aria-label={placeholder}
+        aria-describedby={helpId}
+        placeholder={placeholder}
+        className="block min-h-24 w-full resize-y bg-transparent px-3 py-3 text-base leading-relaxed outline-none placeholder:text-muted-foreground/70 sm:text-sm"
+      />
       <div
         role="toolbar"
         aria-label="Formatação do comentário"
-        className="flex flex-wrap items-center gap-0.5 border-b border-border p-1.5 sm:gap-1 sm:p-2"
+        className="flex flex-wrap items-center gap-0.5 border-t border-border/70 bg-secondary/30 px-2 py-1.5"
       >
         {tools.map((tool) => (
           <button
@@ -62,15 +75,15 @@ export function CommentEditor({
             title={tool.label}
             aria-label={tool.label}
             onClick={() => format(tool.marker, tool.block)}
-            className={`min-h-10 rounded px-2.5 py-2 text-sm hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ${tool.className || ""}`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:h-9 sm:w-9"
           >
-            {tool.text}
+            <tool.icon className="h-4 w-4" aria-hidden="true" />
           </button>
         ))}
         <select
           aria-label="Tamanho do texto"
           defaultValue="size"
-          className="rounded border border-input bg-background px-2 py-2 text-sm"
+          className="ml-1 min-h-8 max-w-24 rounded-lg border-0 bg-transparent px-1 py-1 text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary sm:text-sm"
           onChange={(e) => {
             format(e.target.value, true);
             e.target.value = "size";
@@ -84,27 +97,15 @@ export function CommentEditor({
           <option value="# ">Maior</option>
         </select>
       </div>
-      <textarea
-        ref={input}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        maxLength={2000}
-        rows={3}
-        autoFocus={autoFocus}
-        aria-label={placeholder}
-        aria-describedby={helpId}
-        placeholder={placeholder}
-        className="w-full resize-y bg-transparent p-3 text-base outline-none sm:text-sm focus-visible:ring-2 focus-visible:ring-primary"
-      />
       <div
         id={helpId}
-        className="flex flex-wrap justify-between gap-2 px-3 pb-2 text-xs text-muted-foreground"
+        className="flex flex-wrap justify-between gap-2 border-t border-border/50 px-3 py-2 text-[11px] text-muted-foreground"
       >
-        <span>Selecione o texto para formatar.</span>
+        <span className="sr-only sm:not-sr-only">Selecione um trecho para formatar.</span>
         <span>{value.length}/2000</span>
       </div>
       {value && (
-        <details className="border-t border-border p-3 text-sm">
+        <details className="border-t border-border/60 bg-secondary/20 p-3 text-sm">
           <summary className="cursor-pointer font-semibold text-primary">Ver prévia</summary>
           <div className="mt-3">
             <CommentText text={value} />
