@@ -16,6 +16,7 @@ import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
 import { CommentEditor } from "@/components/CommentEditor";
 import { CommentText } from "@/components/CommentText";
+import { TypingPrompt } from "@/components/TypingPrompt";
 import { StockLogo } from "@/components/StockLogo";
 import { useUser, useSignOut } from "@/hooks/use-session";
 import { communityRequest, type CommunityData, type CommunityPost as Post } from "@/lib/community";
@@ -307,11 +308,16 @@ function StockPage() {
                 onClick={() => setComposerOpen(true)}
                 aria-expanded={false}
                 aria-controls="comment-composer"
+                aria-label={text ? "Continuar meu comentário" : prompts[promptIndex]}
                 className="flex min-h-12 w-full items-center gap-3 rounded-xl px-1 text-left text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:text-base"
               >
                 <PenLine className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1 break-words">
-                  {text ? "Continuar meu comentário" : prompts[promptIndex]}
+                  {text ? (
+                    "Continuar meu comentário"
+                  ) : (
+                    <TypingPrompt text={prompts[promptIndex]!} />
+                  )}
                 </span>
                 <span className="hidden shrink-0 text-xs font-semibold text-primary sm:block">
                   Comentar
@@ -536,7 +542,7 @@ function PostItem({
       <div className="mt-3 min-w-0 sm:ml-11">
         {post.is_pinned && (
           <p className="mb-2 flex items-center gap-1.5 text-xs font-medium text-primary">
-            <Pin className="h-3 w-3" aria-hidden="true" /> Fixado pelo Sérgio
+            <Pin className="h-3 w-3" aria-hidden="true" /> Fixado
           </p>
         )}
         <div className={`leading-relaxed ${small ? "text-sm" : "text-[15px] sm:text-base"}`}>
