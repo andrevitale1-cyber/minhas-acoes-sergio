@@ -14,6 +14,7 @@ import {
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
+import { ReplyComposer } from "@/components/ReplyComposer";
 import { CommentEditor } from "@/components/CommentEditor";
 import { CommentText } from "@/components/CommentText";
 import { TypingPrompt } from "@/components/TypingPrompt";
@@ -138,6 +139,7 @@ function StockPage() {
   }, [composerOpen]);
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const replyDraftTarget = useRef<string | null>(null);
 
   useEffect(() => {
     if (!communityAvailable) return;
@@ -301,7 +303,9 @@ function StockPage() {
             Opiniões, notícias e conversas da comunidade.
           </p>
 
-          <div className="mt-5 rounded-2xl border border-border bg-card p-3 sm:p-4">
+          <div
+            className={`mt-5 rounded-2xl border bg-card transition-shadow ${composerOpen ? "border-primary/20 p-3 shadow-sm sm:p-4" : "border-border px-3 py-1 sm:px-4"}`}
+          >
             {!composerOpen ? (
               <button
                 type="button"
@@ -309,7 +313,7 @@ function StockPage() {
                 aria-expanded={false}
                 aria-controls="comment-composer"
                 aria-label={text ? "Continuar meu comentário" : prompts[promptIndex]}
-                className="flex min-h-12 w-full items-center gap-3 rounded-xl px-1 text-left text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:text-base"
+                className="flex min-h-10 w-full items-center gap-3 rounded-xl px-1 text-left text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:text-base"
               >
                 <PenLine className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1 break-words">
@@ -325,8 +329,8 @@ function StockPage() {
               </button>
             ) : (
               <div id="comment-composer">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold">Seu comentário</p>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold">Compartilhe sua opinião</p>
                   <button
                     type="button"
                     onClick={() => setComposerOpen(false)}
@@ -415,36 +419,25 @@ function StockPage() {
                       <MessageCircle className="h-3.5 w-3.5" /> Responder
                     </Link>
                   ) : replyTo === p.id ? (
-                    <form
-                      className="mt-3 flex flex-col items-start gap-2"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
+                    <ReplyComposer
+                      author={p.author_name}
+                      value={replyText}
+                      onChange={setReplyText}
+                      busy={busy}
+                      onDismiss={() => setReplyTo(null)}
+                      onSubmit={async () => {
                         if (await publish(replyText, p.id)) {
                           setReplyText("");
                           setReplyTo(null);
                         }
                       }}
-                    >
-                      <div className="w-full">
-                        <CommentEditor
-                          autoFocus
-                          value={replyText}
-                          onChange={setReplyText}
-                          placeholder={`Responder a ${p.author_name}…`}
-                        />
-                      </div>
-                      <button
-                        disabled={busy || !replyText.trim()}
-                        className="min-h-10 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-40"
-                      >
-                        Responder
-                      </button>
-                    </form>
+                    />
                   ) : (
                     <button
                       onClick={() => {
+                        if (replyDraftTarget.current !== p.id) setReplyText("");
+                        replyDraftTarget.current = p.id;
                         setReplyTo(p.id);
-                        setReplyText("");
                       }}
                       className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-primary"
                     >
