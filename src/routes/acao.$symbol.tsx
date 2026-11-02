@@ -18,6 +18,7 @@ import { ReplyComposer } from "@/components/ReplyComposer";
 import { CommentEditor } from "@/components/CommentEditor";
 import { CommentText } from "@/components/CommentText";
 import { TypingPrompt } from "@/components/TypingPrompt";
+import { SiteFooter } from "@/components/SiteFooter";
 import { StockLogo } from "@/components/StockLogo";
 import { useUser, useSignOut } from "@/hooks/use-session";
 import { communityRequest, type CommunityData, type CommunityPost as Post } from "@/lib/community";
@@ -201,7 +202,7 @@ function StockPage() {
   const authLink = { to: "/auth" as const, search: { next: `/acao/${stock.symbol}` } };
 
   return (
-    <div className="min-h-screen">
+    <div className="flex min-h-screen flex-col">
       <div className="contents">
         <header className="sticky top-0 z-30 bg-navy text-navy-foreground">
           <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-3 px-4 py-3 sm:flex-nowrap sm:gap-6 sm:px-6 sm:py-4">
@@ -286,7 +287,7 @@ function StockPage() {
         </div>
       </div>
 
-      <main className="mx-auto max-w-3xl px-4 pb-10 sm:px-6">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 pb-10 sm:px-6">
         {error && (
           <p
             role="alert"
@@ -457,6 +458,7 @@ function StockPage() {
           </div>
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }
