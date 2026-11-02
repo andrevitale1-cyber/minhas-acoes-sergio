@@ -6,7 +6,8 @@ export const communityActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("rate"), stars: z.number().int().min(1).max(5) }),
   z.object({
     action: z.literal("post"),
-    content: z.string().trim().min(1).max(2000),
+    content: z.string().trim().max(2000),
+    attachment_ids: z.array(z.string().uuid()).max(3).default([]),
     parent_id: z.string().uuid().nullable(),
   }),
   z.object({ action: z.literal("delete"), id: z.string().uuid() }),
@@ -62,6 +63,12 @@ export async function handleCommunity(request: Request): Promise<Response> {
           { error: "Verifique os dados: notas de 1 a 5 e textos de até 2.000 caracteres." },
           400,
         );
+      if (
+        parsed.data.action === "post" &&
+        ((!parsed.data.content && !parsed.data.attachment_ids.length) ||
+          new Set(parsed.data.attachment_ids).size !== parsed.data.attachment_ids.length)
+      )
+        return json({ error: "Escreva um comentário ou selecione um anexo." }, 400);
       if (parsed.data.action === "pin" && !isSergio)
         return json({ error: "Somente o Sérgio pode fixar comentários." }, 403);
       const [rateLimit] =
@@ -86,7 +93,18 @@ export async function handleCommunity(request: Request): Promise<Response> {
           [profile.firstName, profile.lastName].filter(Boolean).join(" ") ||
           profile.username ||
           "Investidor";
-        await db`INSERT INTO posts (market, symbol, user_id, author_name, content, parent_id) VALUES (${market}, ${symbol}, ${userId}, ${author.slice(0, 100)}, ${action.content}, ${action.parent_id})`;
+        await db.begin(async (tx) => {
+          if (action.attachment_ids.length) {
+            const files =
+              await tx`SELECT id FROM comment_attachments WHERE id IN ${tx(action.attachment_ids)} AND owner_id = ${userId} AND post_id IS NULL AND created_at > now() - interval '1 day' FOR UPDATE`;
+            if (files.length !== action.attachment_ids.length)
+              throw new Error("INVALID_ATTACHMENTS");
+          }
+          const [post] =
+            await tx`INSERT INTO posts (market, symbol, user_id, author_name, content, parent_id) VALUES (${market}, ${symbol}, ${userId}, ${author.slice(0, 100)}, ${action.content}, ${action.parent_id}) RETURNING id`;
+          if (action.attachment_ids.length)
+            await tx`UPDATE comment_attachments SET post_id = ${post!["id"]} WHERE id IN ${tx(action.attachment_ids)}`;
+        });
       } else if (action.action === "pin") {
         const [pinned] =
           await db`UPDATE posts SET pinned_at = ${action.pinned ? new Date() : null} WHERE id = ${action.id} AND market = ${market} AND symbol = ${symbol} AND hidden_at IS NULL RETURNING id`;
@@ -106,7 +124,7 @@ export async function handleCommunity(request: Request): Promise<Response> {
     ]);
     const ids = roots.slice(0, 20).map((root) => root["id"]);
     const posts = ids.length
-      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ANY(${sergioIds}::text[])) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${isSergio})) AS can_delete, ${isSergio}::boolean AS can_pin, (pinned_at IS NOT NULL) AS is_pinned, NULL AS image_url FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY array_position(${ids}::uuid[], coalesce(parent_id, id)), (pinned_at IS NOT NULL) DESC, created_at DESC, id DESC LIMIT 500`
+      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ANY(${sergioIds}::text[])) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${isSergio})) AS can_delete, ${isSergio}::boolean AS can_pin, (pinned_at IS NOT NULL) AS is_pinned, NULL AS image_url, coalesce((SELECT json_agg(json_build_object('id', a.id, 'name', a.file_name, 'type', a.content_type, 'size', a.size) ORDER BY a.created_at) FROM comment_attachments a WHERE a.post_id = posts.id), '[]'::json) AS attachments FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY array_position(${ids}::uuid[], coalesce(parent_id, id)), (pinned_at IS NOT NULL) DESC, created_at DESC, id DESC LIMIT 500`
       : [];
     return json({
       posts,
@@ -115,7 +133,9 @@ export async function handleCommunity(request: Request): Promise<Response> {
       mine: mine[0]?.["stars"] ?? null,
       hasMore: roots.length > 20,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "INVALID_ATTACHMENTS")
+      return json({ error: "Um anexo não está mais disponível. Remova-o e anexe novamente." }, 400);
     return json(
       {
         error:

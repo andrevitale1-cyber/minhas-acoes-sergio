@@ -14,6 +14,9 @@ import {
 import { SearchBox } from "@/components/SearchBox";
 import { findStock } from "@/lib/stocks";
 import { MarketPanel } from "@/components/MarketPanel";
+import { useAttachmentDraft } from "@/hooks/use-attachment-draft";
+import { CommentAttachments } from "@/components/CommentAttachments";
+import { formatPostDate } from "@/lib/post-date";
 import { ReplyComposer } from "@/components/ReplyComposer";
 import { CommentEditor } from "@/components/CommentEditor";
 import { CommentText } from "@/components/CommentText";
@@ -68,14 +71,6 @@ function StockRoute() {
   return <StockPage key={stock.symbol} />;
 }
 
-function timeAgo(iso: string) {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (s < 60) return "agora";
-  if (s < 3600) return `${Math.floor(s / 60)} min`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h`;
-  return new Date(iso).toLocaleDateString("pt-BR");
-}
-
 function Stars({
   value,
   onPick,
@@ -126,6 +121,8 @@ function StockPage() {
   const [busy, setBusy] = useState(false);
   const requestVersion = useRef(0);
   const [text, setText] = useState("");
+  const attachments = useAttachmentDraft();
+  const replyAttachments = useAttachmentDraft();
   const [composerOpen, setComposerOpen] = useState(false);
   const [promptIndex, setPromptIndex] = useState(0);
   const prompts = [
@@ -166,13 +163,15 @@ function StockPage() {
   const mine = community.mine;
   const posts = community.posts;
 
-  const mutate = async (data: unknown) => {
+  const mutate = async (data: object, prepare?: () => Promise<string[]>) => {
     if (!user || busy) return false;
     const version = ++requestVersion.current;
     setBusy(true);
     setError(null);
     try {
-      const updated = await communityRequest(stock.symbol, "POST", data, page);
+      const uploaded = prepare ? await prepare() : undefined;
+      const payload = uploaded ? { ...data, attachment_ids: uploaded } : data;
+      const updated = await communityRequest(stock.symbol, "POST", payload, page);
       if (version === requestVersion.current) setCommunity(updated);
       return true;
     } catch (err) {
@@ -187,8 +186,14 @@ function StockPage() {
   };
 
   const publish = async (content: string, parent_id: string | null) => {
-    if (!content.trim()) return false;
-    return mutate({ action: "post", content: content.trim(), parent_id });
+    const draft = parent_id ? replyAttachments : attachments;
+    if (!content.trim() && !draft.items.length) return false;
+    const saved = await mutate(
+      { action: "post", content: content.trim(), parent_id },
+      draft.upload,
+    );
+    if (saved) draft.clear();
+    return saved;
   };
 
   const roots = posts.filter((p) => !p.parent_id);
@@ -313,12 +318,16 @@ function StockPage() {
                 onClick={() => setComposerOpen(true)}
                 aria-expanded={false}
                 aria-controls="comment-composer"
-                aria-label={text ? "Continuar meu comentário" : prompts[promptIndex]}
+                aria-label={
+                  text || attachments.items.length
+                    ? "Continuar meu comentário"
+                    : prompts[promptIndex]
+                }
                 className="flex min-h-10 w-full items-center gap-3 rounded-xl px-1 text-left text-sm text-muted-foreground transition-colors hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary sm:text-base"
               >
                 <PenLine className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <span className="min-w-0 flex-1 break-words">
-                  {text ? (
+                  {text || attachments.items.length ? (
                     "Continuar meu comentário"
                   ) : (
                     <TypingPrompt text={prompts[promptIndex]!} />
@@ -354,13 +363,15 @@ function StockPage() {
                   >
                     <CommentEditor
                       autoFocus
+                      attachments={attachments}
+                      disabled={busy}
                       value={text}
                       onChange={setText}
                       placeholder={`O que está acontecendo com ${stock.symbol}?`}
                     />
                     <div className="mt-3 flex justify-end">
                       <button
-                        disabled={busy || !text.trim()}
+                        disabled={busy || (!text.trim() && !attachments.items.length)}
                         className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-40"
                       >
                         Publicar
@@ -422,6 +433,7 @@ function StockPage() {
                   ) : replyTo === p.id ? (
                     <ReplyComposer
                       author={p.author_name}
+                      attachments={replyAttachments}
                       value={replyText}
                       onChange={setReplyText}
                       busy={busy}
@@ -436,7 +448,10 @@ function StockPage() {
                   ) : (
                     <button
                       onClick={() => {
-                        if (replyDraftTarget.current !== p.id) setReplyText("");
+                        if (replyDraftTarget.current !== p.id) {
+                          setReplyText("");
+                          replyAttachments.discard();
+                        }
                         replyDraftTarget.current = p.id;
                         setReplyTo(p.id);
                       }}
@@ -499,7 +514,9 @@ function PostItem({
                 Sérgio · Autor
               </span>
             )}
-            <time dateTime={post.created_at}>{timeAgo(post.created_at)}</time>
+            <time dateTime={post.created_at} title="Horário de Brasília">
+              {formatPostDate(post.created_at)}
+            </time>
           </div>
         </div>
       </div>
@@ -541,7 +558,8 @@ function PostItem({
           </p>
         )}
         <div className={`leading-relaxed ${small ? "text-sm" : "text-[15px] sm:text-base"}`}>
-          <CommentText text={post.content} />
+          {post.content && <CommentText text={post.content} />}
+          <CommentAttachments files={post.attachments ?? []} />
         </div>
       </div>
     </article>

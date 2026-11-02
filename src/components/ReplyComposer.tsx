@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { CornerDownRight, Send, X } from "lucide-react";
+import type { AttachmentDraft } from "@/hooks/use-attachment-draft";
 import { CommentEditor } from "./CommentEditor";
 
 export function ReplyComposer({
@@ -9,6 +10,7 @@ export function ReplyComposer({
   onDismiss,
   onSubmit,
   busy,
+  attachments,
 }: {
   author: string;
   value: string;
@@ -16,6 +18,7 @@ export function ReplyComposer({
   onDismiss: () => void;
   onSubmit: () => Promise<void>;
   busy: boolean;
+  attachments?: AttachmentDraft;
 }) {
   const form = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -40,7 +43,7 @@ export function ReplyComposer({
       className="relative ml-2 mt-4 min-w-0 pl-5 before:absolute before:-top-5 before:bottom-6 before:left-0 before:w-4 before:rounded-bl-xl before:border-b-2 before:border-l-2 before:border-primary/20 sm:ml-4 sm:pl-6"
       onSubmit={async (event) => {
         event.preventDefault();
-        if (!busy && value.trim()) await onSubmit();
+        if (!busy && (value.trim() || attachments?.items.length)) await onSubmit();
       }}
     >
       <div className="min-w-0 rounded-2xl border border-primary/15 bg-card p-3 shadow-sm sm:p-4">
@@ -62,13 +65,15 @@ export function ReplyComposer({
         </div>
         <CommentEditor
           autoFocus
+          attachments={attachments}
+          disabled={busy}
           value={value}
           onChange={onChange}
           placeholder="Escreva sua resposta…"
         />
         <div className="mt-3 flex justify-end">
           <button
-            disabled={busy || !value.trim()}
+            disabled={busy || (!value.trim() && !attachments?.items.length)}
             className="inline-flex min-h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-40"
           >
             <Send className="h-3.5 w-3.5" aria-hidden="true" />

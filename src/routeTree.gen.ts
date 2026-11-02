@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AcaoSymbolRouteImport } from './routes/acao.$symbol'
+import { Route as ApiAttachmentsRouteImport } from './routes/api.attachments'
 import { Route as ApiCommunityRouteImport } from './routes/api.community'
 import { Route as ApiMarketRouteImport } from './routes/api.market'
 
@@ -30,6 +31,11 @@ const AcaoSymbolRoute = AcaoSymbolRouteImport.update({
   path: '/acao/$symbol',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAttachmentsRoute = ApiAttachmentsRouteImport.update({
+  id: '/api/attachments',
+  path: '/api/attachments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCommunityRoute = ApiCommunityRouteImport.update({
   id: '/api/community',
   path: '/api/community',
@@ -45,6 +51,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/attachments': typeof ApiAttachmentsRoute
   '/api/community': typeof ApiCommunityRoute
   '/api/market': typeof ApiMarketRoute
 }
@@ -52,6 +59,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/attachments': typeof ApiAttachmentsRoute
   '/api/community': typeof ApiCommunityRoute
   '/api/market': typeof ApiMarketRoute
 }
@@ -60,19 +68,33 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/acao/$symbol': typeof AcaoSymbolRoute
+  '/api/attachments': typeof ApiAttachmentsRoute
   '/api/community': typeof ApiCommunityRoute
   '/api/market': typeof ApiMarketRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/acao/$symbol' | '/api/community' | '/api/market'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/acao/$symbol'
+    | '/api/attachments'
+    | '/api/community'
+    | '/api/market'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/acao/$symbol' | '/api/community' | '/api/market'
+  to:
+    | '/'
+    | '/auth'
+    | '/acao/$symbol'
+    | '/api/attachments'
+    | '/api/community'
+    | '/api/market'
   id:
     | '__root__'
     | '/'
     | '/auth'
     | '/acao/$symbol'
+    | '/api/attachments'
     | '/api/community'
     | '/api/market'
   fileRoutesById: FileRoutesById
@@ -81,6 +103,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
   AcaoSymbolRoute: typeof AcaoSymbolRoute
+  ApiAttachmentsRoute: typeof ApiAttachmentsRoute
   ApiCommunityRoute: typeof ApiCommunityRoute
   ApiMarketRoute: typeof ApiMarketRoute
 }
@@ -108,6 +131,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AcaoSymbolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/attachments': {
+      id: '/api/attachments'
+      path: '/api/attachments'
+      fullPath: '/api/attachments'
+      preLoaderRoute: typeof ApiAttachmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/community': {
       id: '/api/community'
       path: '/api/community'
@@ -129,6 +159,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
   AcaoSymbolRoute: AcaoSymbolRoute,
+  ApiAttachmentsRoute: ApiAttachmentsRoute,
   ApiCommunityRoute: ApiCommunityRoute,
   ApiMarketRoute: ApiMarketRoute,
 }
