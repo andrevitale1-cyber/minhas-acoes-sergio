@@ -1,6 +1,10 @@
 // @vitest-environment node
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), sql: vi.fn(), profile: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  auth: vi.fn(),
+  sql: Object.assign(vi.fn(), { begin: vi.fn() }),
+  profile: vi.fn(),
+}));
 vi.mock("@clerk/tanstack-react-start/server", () => ({
   auth: mocks.auth,
   clerkClient: () => ({ users: { getUser: mocks.profile } }),
@@ -20,6 +24,37 @@ beforeEach(() => {
   vi.stubEnv("SERGIO_CLERK_USER_ID", "user_sergio");
   vi.stubEnv("SERGIO_ADDITIONAL_CLERK_USER_IDS", " user_second_sergio ");
   mocks.auth.mockResolvedValue({ userId: "user_real" });
+});
+it("rejects duplicate attachment IDs before writing", async () => {
+  const id = "e8214cd4-18b1-4e83-a42a-0f401c76bfa5";
+  expect(
+    (
+      await handleCommunity(
+        request({ action: "post", content: "", parent_id: null, attachment_ids: [id, id] }),
+      )
+    ).status,
+  ).toBe(400);
+  expect(mocks.sql).not.toHaveBeenCalled();
+});
+it("cannot claim another user's attachment or reuse a published attachment", async () => {
+  mocks.sql.mockResolvedValueOnce([{ requests: 1 }]);
+  mocks.profile.mockResolvedValue({ firstName: "Investidor", lastName: null, username: null });
+  const tx = vi.fn().mockReturnValue([]);
+  mocks.sql.begin.mockImplementation(async (callback) => callback(tx));
+  const response = await handleCommunity(
+    request({
+      action: "post",
+      content: "",
+      parent_id: null,
+      attachment_ids: ["e8214cd4-18b1-4e83-a42a-0f401c76bfa5"],
+    }),
+  );
+  expect(response.status).toBe(400);
+  expect(
+    tx.mock.calls.some(
+      (call) => Array.isArray(call[0]) && call[0].join("").includes("INSERT INTO posts"),
+    ),
+  ).toBe(false);
 });
 it("rejects pinning by other users, including forged moderator fields", async () => {
   const response = await handleCommunity(

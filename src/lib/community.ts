@@ -1,3 +1,4 @@
+import type { CommentAttachment } from "./attachments";
 export type CommunityPost = {
   id: string;
   author_name: string;
@@ -9,6 +10,7 @@ export type CommunityPost = {
   can_delete: boolean;
   can_pin: boolean;
   is_pinned: boolean;
+  attachments: CommentAttachment[];
 };
 export type CommunityData = {
   posts: CommunityPost[];

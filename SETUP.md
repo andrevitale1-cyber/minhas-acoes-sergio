@@ -30,3 +30,14 @@ As APIs de cotações estão ativas em `src/lib/market-status.ts`. A brapi atend
 O usuário do Sérgio (`sergionetominhasacoes@gmail.com`) já está vinculado pelo `SERGIO_CLERK_USER_ID` verificado no Clerk. Ele pode fixar/desafixar comentários e respostas de qualquer autor e excluir publicações de terceiros. Conversas com comentários fixados aparecem primeiro. A autorização é conferida no servidor.
 
 O editor de comentários e respostas oferece negrito, itálico, sublinhado, três tamanhos de texto, listas, citações e prévia. Armazena texto com marcadores, mantendo o limite de 2.000 caracteres. O renderizador usa elementos React permitidos e nunca interpreta HTML fornecido pelo usuário.
+
+
+## Anexos e deployment do cliente
+
+Projeto principal na conta `sergionetominhasacoes-3585`, ID `prj_dfOmlSnLNfULwyR7FbTGBXyrBVkA`, URL https://minhas-acoes-sergio-orcin.vercel.app. Publicar pelo GitHub (branch main), conectado à conta do cliente. O vínculo local `.vercel/repo.json` foi atualizado; a autenticação da CLI pode precisar ser feita nessa conta antes de usá-la.
+
+Blob privado `minhas-acoes-anexos`, `store_CIrMyHj2oJErFE9E`, em iad1, conectado a Production e Preview. O SDK oficial usa OIDC da Vercel e `BLOB_STORE_ID`, sem token permanente. Metadados e vinculação ficam em `comment_attachments` no Render.
+
+Comentários e respostas aceitam até 3 anexos de 3 MB cada: JPG, PNG, GIF, WebP, PDF, TXT, CSV, DOCX, XLSX, PPTX e ZIP. O servidor confere tamanho e assinatura do conteúdo. Somente o autor pode vincular seus uploads não publicados; a publicação e a vinculação são uma transação. Downloads só são liberados para comentários visíveis (ou para o dono do rascunho). Arquivos de comentários excluídos deixam de ser servidos. Uploads pendentes expiram em 24 horas e são limpos no próximo envio do autor; adicionar limpeza agendada se o uso crescer.
+
+A data de postagem é exibida como data e hora fixas, no fuso America/Sao_Paulo.
