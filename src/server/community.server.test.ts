@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.stubEnv("DATABASE_URL", "configured");
   vi.stubEnv("CLERK_SECRET_KEY", "configured");
   vi.stubEnv("SERGIO_CLERK_USER_ID", "user_sergio");
+  vi.stubEnv("SERGIO_ADDITIONAL_CLERK_USER_IDS", " user_second_sergio ");
   mocks.auth.mockResolvedValue({ userId: "user_real" });
 });
 it("rejects pinning by other users, including forged moderator fields", async () => {
@@ -137,3 +138,26 @@ it("rejects deletion when the ownership check returns no authorized row", async 
     false,
   ]);
 });
+
+it.each(["pin", "delete"])(
+  "grants %s to the explicitly configured second account",
+  async (action) => {
+    mocks.auth.mockResolvedValue({ userId: "user_second_sergio" });
+    mocks.sql
+      .mockResolvedValueOnce([{ requests: 1 }])
+      .mockResolvedValueOnce([{ id: "post" }])
+      .mockResolvedValueOnce([{ average: 0, count: 0 }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const response = await handleCommunity(
+      request({
+        action,
+        id: "e8214cd4-18b1-4e83-a42a-0f401c76bfa5",
+        ...(action === "pin" ? { pinned: true } : {}),
+      }),
+    );
+    expect(response.status).toBe(200);
+    if (action === "delete") expect(mocks.sql.mock.calls[1]?.at(-1)).toBe(true);
+    expect(mocks.sql.mock.calls[4]?.slice(1)).toContainEqual(["user_sergio", "user_second_sergio"]);
+  },
+);
