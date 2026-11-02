@@ -36,7 +36,13 @@ export async function handleCommunity(request: Request): Promise<Response> {
     return json({ error: "A comunidade ainda está sendo configurada." }, 503);
   try {
     const { userId } = await auth();
-    const sergioId = process.env["SERGIO_CLERK_USER_ID"] ?? "";
+    const sergioIds = [
+      process.env["SERGIO_CLERK_USER_ID"],
+      ...(process.env["SERGIO_ADDITIONAL_CLERK_USER_IDS"] ?? "").split(","),
+    ]
+      .map((id) => id?.trim())
+      .filter((id): id is string => Boolean(id));
+    const isSergio = Boolean(userId && sergioIds.includes(userId));
     const db = getDatabase();
     if (request.method === "POST") {
       if (!userId) return json({ error: "Entre para participar." }, 401);
@@ -56,7 +62,7 @@ export async function handleCommunity(request: Request): Promise<Response> {
           { error: "Verifique os dados: notas de 1 a 5 e textos de até 2.000 caracteres." },
           400,
         );
-      if (parsed.data.action === "pin" && userId !== sergioId)
+      if (parsed.data.action === "pin" && !isSergio)
         return json({ error: "Somente o Sérgio pode fixar comentários." }, 403);
       const [rateLimit] =
         await db`INSERT INTO community_rate_limits (user_id, window_start, requests) VALUES (${userId}, date_trunc('hour', now()), 1) ON CONFLICT (user_id, window_start) DO UPDATE SET requests = community_rate_limits.requests + 1 WHERE community_rate_limits.requests < 60 RETURNING requests`;
@@ -87,7 +93,7 @@ export async function handleCommunity(request: Request): Promise<Response> {
         if (!pinned) return json({ error: "Publicação não encontrada." }, 404);
       } else {
         const [deleted] =
-          await db`UPDATE posts SET hidden_at = now() WHERE id = ${action.id} AND market = ${market} AND symbol = ${symbol} AND hidden_at IS NULL AND (user_id = ${userId} OR ${userId === sergioId}) RETURNING id`;
+          await db`UPDATE posts SET hidden_at = now() WHERE id = ${action.id} AND market = ${market} AND symbol = ${symbol} AND hidden_at IS NULL AND (user_id = ${userId} OR ${isSergio}) RETURNING id`;
         if (!deleted) return json({ error: "Você não pode excluir esta publicação." }, 403);
       }
     }
@@ -96,11 +102,11 @@ export async function handleCommunity(request: Request): Promise<Response> {
       userId
         ? db`SELECT stars FROM ratings WHERE market = ${market} AND symbol = ${symbol} AND user_id = ${userId}`
         : [],
-      db`SELECT id FROM posts p WHERE market = ${market} AND symbol = ${symbol} AND parent_id IS NULL AND hidden_at IS NULL ORDER BY (pinned_at IS NOT NULL OR EXISTS (SELECT 1 FROM posts r WHERE r.parent_id = p.id AND r.pinned_at IS NOT NULL AND r.hidden_at IS NULL)) DESC, (user_id = ${sergioId}) DESC, created_at DESC, id DESC LIMIT 21 OFFSET ${page * 20}`,
+      db`SELECT id FROM posts p WHERE market = ${market} AND symbol = ${symbol} AND parent_id IS NULL AND hidden_at IS NULL ORDER BY (pinned_at IS NOT NULL OR EXISTS (SELECT 1 FROM posts r WHERE r.parent_id = p.id AND r.pinned_at IS NOT NULL AND r.hidden_at IS NULL)) DESC, (user_id = ANY(${sergioIds}::text[])) DESC, created_at DESC, id DESC LIMIT 21 OFFSET ${page * 20}`,
     ]);
     const ids = roots.slice(0, 20).map((root) => root["id"]);
     const posts = ids.length
-      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ${sergioId}) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${userId !== null && userId === sergioId})) AS can_delete, ${userId !== null && userId === sergioId}::boolean AS can_pin, (pinned_at IS NOT NULL) AS is_pinned, NULL AS image_url FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY array_position(${ids}::uuid[], coalesce(parent_id, id)), (pinned_at IS NOT NULL) DESC, created_at DESC, id DESC LIMIT 500`
+      ? await db`SELECT id, author_name, content, parent_id, created_at, (user_id = ANY(${sergioIds}::text[])) AS is_sergio, (${userId !== null} AND (user_id = ${userId ?? ""} OR ${isSergio})) AS can_delete, ${isSergio}::boolean AS can_pin, (pinned_at IS NOT NULL) AS is_pinned, NULL AS image_url FROM posts WHERE hidden_at IS NULL AND (id IN ${db(ids)} OR parent_id IN ${db(ids)}) ORDER BY array_position(${ids}::uuid[], coalesce(parent_id, id)), (pinned_at IS NOT NULL) DESC, created_at DESC, id DESC LIMIT 500`
       : [];
     return json({
       posts,

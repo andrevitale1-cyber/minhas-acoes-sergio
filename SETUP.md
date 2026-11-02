@@ -14,6 +14,7 @@ Definir na Vercel em Preview e Production e, localmente, em `.env.local` (ignora
 - `DATABASE_URL`: URL **externa** do Render. A conexão exige TLS; o servidor usa no máximo duas conexões por instância.
 - `VITE_CLERK_PUBLISHABLE_KEY`: chave pública do Clerk, exposta ao navegador por definição.
 - `CLERK_SECRET_KEY`: chave privada, somente no servidor.
+- `SERGIO_ADDITIONAL_CLERK_USER_IDS`: IDs verificados de outras contas autorizadas do Sérgio, separados por vírgula. Recebem as mesmas permissões e destaque; a conta principal é preservada.
 - `SERGIO_CLERK_USER_ID`: ID do usuário do Sérgio nesta instância do Clerk. Identifica publicações destacadas e permite moderar comentários. Nunca aceitar esse papel enviado pelo navegador.
 
 Nunca versionar credenciais. Não colocar `DATABASE_URL` ou a chave secreta em variáveis com prefixo `VITE_`.
