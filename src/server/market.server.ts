@@ -59,6 +59,79 @@ function failure(message: string, status: number) {
 }
 
 export async function handleMarketRequest(request: Request): Promise<Response> {
+  const response = await handlePrimaryMarketRequest(request);
+  const params = new URL(request.url).searchParams;
+  const symbol = (params.get("symbol") ?? "").toUpperCase().trim();
+  if (marketDataPaused || params.get("period") !== "5y" || !/^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol))
+    return response;
+  if (response.ok) {
+    const quote = await response.clone().json();
+    if (quote.history?.length > 1) return response;
+  }
+  try {
+    const yahooSymbol = /^[A-Z]{4}\d{1,2}$/.test(symbol) ? `${symbol}.SA` : symbol;
+    const fallback = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?range=5y&interval=1d`,
+      { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000) },
+    );
+    if (!fallback.ok) return response;
+    const quote = normalizeYahooFiveYears(await fallback.json(), symbol, yahooSymbol);
+    return Response.json(quote, {
+      headers: { "Cache-Control": "public, max-age=60, s-maxage=300" },
+    });
+  } catch {
+    return response;
+  }
+}
+
+const yahooChartSchema = z.object({
+  chart: z.object({
+    result: z.array(z.object({
+      meta: z.object({
+        symbol: z.string(),
+        currency: z.string().length(3),
+        longName: z.string().optional(),
+        shortName: z.string().optional(),
+        regularMarketPrice: z.number().finite().positive(),
+        regularMarketTime: z.number().int().positive(),
+        previousClose: nullableNumber,
+      }),
+      timestamp: z.array(z.number().int().positive()),
+      indicators: z.object({ quote: z.array(z.object({ close: z.array(nullableNumber) })).min(1) }),
+    })).min(1),
+  }),
+});
+
+export function normalizeYahooFiveYears(value: unknown, symbol: string, yahooSymbol: string): MarketQuote {
+  const row = yahooChartSchema.parse(value).chart.result[0]!;
+  if (row.meta.symbol !== yahooSymbol) throw new Error("Unexpected symbol");
+  const points = new Map<number, number>();
+  row.timestamp.forEach((timestamp, index) => {
+    const price = row.indicators.quote[0]!.close[index];
+    if (price != null && price > 0) points.set(timestamp * 1000, price);
+  });
+  if (points.size < 2) throw new Error("Insufficient history");
+  const previousClose = row.meta.previousClose != null && row.meta.previousClose > 0
+    ? row.meta.previousClose : null;
+  const change = previousClose === null ? null : row.meta.regularMarketPrice - previousClose;
+  return {
+    symbol,
+    name: row.meta.longName || row.meta.shortName || symbol,
+    currency: row.meta.currency,
+    price: row.meta.regularMarketPrice,
+    previousClose,
+    change,
+    changePct: change === null ? null : change / previousClose! * 100,
+    quotedAt: new Date(row.meta.regularMarketTime * 1000).toISOString(),
+    fetchedAt: new Date().toISOString(),
+    source: "Yahoo Finance",
+    period: "5y",
+    interval: "1d",
+    history: [...points].sort(([a], [b]) => a - b).map(([time, price]) => ({ time, price })),
+  };
+}
+
+async function handlePrimaryMarketRequest(request: Request): Promise<Response> {
   if (marketDataPaused)
     return failure("As consultas de cotações estão temporariamente pausadas.", 503);
   const params = new URL(request.url).searchParams;
@@ -201,6 +274,7 @@ async function handleTwelveData(symbol: string, period: Period): Promise<Respons
     "1mo": ["1day", 23],
     "6mo": ["1day", 130],
     "1y": ["1day", 260],
+    "5y": ["1day", 1300],
     max: ["1month", 5000],
   } as const;
   const [interval, count] = config[period];
@@ -215,6 +289,11 @@ async function handleTwelveData(symbol: string, period: Period): Promise<Respons
     outputsize: String(count),
     timezone: "UTC",
   }).toString();
+  if (period === "5y") {
+    const start = new Date();
+    start.setUTCFullYear(start.getUTCFullYear() - 5);
+    historyUrl.searchParams.set("start_date", start.toISOString().slice(0, 10));
+  }
   try {
     const options = () => ({
       headers: { Authorization: `apikey ${key}` },

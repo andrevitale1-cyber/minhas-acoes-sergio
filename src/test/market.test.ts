@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
-import { handleMarketRequest, normalizeQuote, normalizeTwelve } from "@/server/market.server";
+import { handleMarketRequest, normalizeQuote, normalizeTwelve, normalizeYahooFiveYears } from "@/server/market.server";
 vi.mock("@/lib/market-status", () => ({ marketDataPaused: false }));
 
 afterEach(() => {
@@ -20,6 +20,68 @@ const sample = {
     { date: 20, close: 96 },
   ],
 };
+
+const yahooSample = {
+  chart: { result: [{
+    meta: { symbol: "RADL3.SA", currency: "BRL", regularMarketPrice: 30, regularMarketTime: 1793797200 },
+    timestamp: [30, 10, 20, 40],
+    indicators: { quote: [{ close: [30, 20, null, -1] }] },
+  }] },
+};
+
+it("uses a complete Yahoo snapshot for 5A when brapi blocks the range", async () => {
+  vi.stubEnv("BRAPI_TOKEN", "test-private-token");
+  const upstream = vi.fn()
+    .mockResolvedValueOnce(Response.json({ code: "INVALID_RANGE" }, { status: 400 }))
+    .mockResolvedValueOnce(Response.json({ results: [{ ...sample, symbol: "RADL3", historicalDataPrice: [] }] }))
+    .mockResolvedValueOnce(Response.json(yahooSample));
+  vi.stubGlobal("fetch", upstream);
+  const response = await handleMarketRequest(new Request("https://site/api/market?symbol=RADL3&period=5y"));
+  const body = await response.json();
+  expect(body).toMatchObject({ symbol: "RADL3", price: 30, source: "Yahoo Finance", period: "5y", previousClose: null });
+  expect(body.history).toEqual([{ time: 10000, price: 20 }, { time: 30000, price: 30 }]);
+  expect(String(upstream.mock.calls[2]![0])).toContain("RADL3.SA?range=5y");
+  expect(upstream.mock.calls[2]![1].headers.Authorization).toBeUndefined();
+});
+
+it("does not call an alternative provider when brapi supplies 5A", async () => {
+  const upstream = vi.fn().mockResolvedValue(Response.json({ results: [sample] }));
+  vi.stubGlobal("fetch", upstream);
+  const response = await handleMarketRequest(new Request("https://site/api/market?symbol=PETR4&period=5y"));
+  expect((await response.json()).source).toBe("brapi.dev");
+  expect(upstream).toHaveBeenCalledTimes(1);
+});
+
+it("rejects Yahoo history for a different issuer or insufficient valid prices", () => {
+  expect(() => normalizeYahooFiveYears(yahooSample, "VALE3", "VALE3.SA")).toThrow();
+  const invalid = structuredClone(yahooSample);
+  invalid.chart.result[0]!.indicators.quote[0]!.close = [null];
+  expect(() => normalizeYahooFiveYears(invalid, "RADL3", "RADL3.SA")).toThrow();
+});
+
+it("keeps the primary quote if the alternative provider fails", async () => {
+  const upstream = vi.fn()
+    .mockResolvedValueOnce(Response.json({ results: [{ ...sample, historicalDataPrice: [] }] }))
+    .mockRejectedValueOnce(new Error("Unavailable"));
+  vi.stubGlobal("fetch", upstream);
+  const response = await handleMarketRequest(new Request("https://site/api/market?symbol=PETR4&period=5y"));
+  expect(response.status).toBe(200);
+  expect((await response.json()).price).toBe(95);
+});
+
+it("requests five calendar years internationally with mocked requests only", async () => {
+  vi.stubEnv("TWELVE_DATA_API_KEY", "test-private-token");
+  const upstream = vi.fn()
+    .mockResolvedValueOnce(Response.json({ symbol: "AAPL", name: "Apple", currency: "USD", close: "30", previous_close: "29", timestamp: 1793797200 }))
+    .mockResolvedValueOnce(Response.json({ values: [{ datetime: "2021-11-05", close: "20" }, { datetime: "2026-11-04", close: "30" }] }));
+  vi.stubGlobal("fetch", upstream);
+  const response = await handleMarketRequest(new Request("https://site/api/market?symbol=AAPL&period=5y"));
+  expect((await response.json()).history).toHaveLength(2);
+  const url = upstream.mock.calls[1]![0] as URL;
+  expect(url.searchParams.get("start_date")).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  expect(url.searchParams.get("outputsize")).toBe("1300");
+  expect(upstream).toHaveBeenCalledTimes(2);
+});
 
 it("calculates the daily fall against previous close and sorts usable history without fabricating points", () => {
   const quote = normalizeQuote(sample, "PETR4", "1d");

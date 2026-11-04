@@ -4,6 +4,7 @@ export const periods = {
   "1mo": { label: "1M", interval: "1d" },
   "6mo": { label: "6M", interval: "1d" },
   "1y": { label: "1A", interval: "1d" },
+  "5y": { label: "5A", interval: "1d" },
   max: { label: "Máx.", interval: "1d" },
 } as const;
 export type Period = keyof typeof periods;

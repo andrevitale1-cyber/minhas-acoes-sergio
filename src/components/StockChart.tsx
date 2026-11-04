@@ -18,7 +18,7 @@ export default function StockChart({ quote }: { quote: MarketQuote }) {
       timeZone: "America/Sao_Paulo",
       ...(intraday ? { hour: "2-digit", minute: "2-digit" } : {}),
       ...(!intraday || full ? { day: "2-digit", month: "2-digit" } : {}),
-      ...(quote.period === "max" ? { year: "numeric" } : {}),
+      ...(quote.period === "max" || quote.period === "5y" ? { year: "numeric" } : {}),
     }).format(value);
   const first = quote.history[0]?.price ?? quote.price;
   const last = quote.history.at(-1)?.price ?? quote.price;
