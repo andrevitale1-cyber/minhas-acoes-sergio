@@ -62,7 +62,8 @@ export async function handleMarketRequest(request: Request): Promise<Response> {
   const response = await handlePrimaryMarketRequest(request);
   const params = new URL(request.url).searchParams;
   const symbol = (params.get("symbol") ?? "").toUpperCase().trim();
-  if (marketDataPaused || params.get("period") !== "5y" || !/^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol))
+  const period = params.get("period") ?? "1d";
+  if (marketDataPaused || !Object.hasOwn(periods, period) || !/^[A-Z][A-Z0-9.-]{0,14}$/.test(symbol))
     return response;
   if (response.ok) {
     const quote = await response.clone().json();
@@ -70,12 +71,13 @@ export async function handleMarketRequest(request: Request): Promise<Response> {
   }
   try {
     const yahooSymbol = /^[A-Z]{4}\d{1,2}$/.test(symbol) ? `${symbol}.SA` : symbol;
+    const interval = period === "max" ? "1mo" : periods[period as Period].interval;
     const fallback = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?range=5y&interval=1d`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?range=${period}&interval=${interval}`,
       { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(10000) },
     );
     if (!fallback.ok) return response;
-    const quote = normalizeYahooFiveYears(await fallback.json(), symbol, yahooSymbol);
+    const quote = normalizeYahoo(await fallback.json(), symbol, yahooSymbol, period as Period);
     return Response.json(quote, {
       headers: { "Cache-Control": "public, max-age=60, s-maxage=300" },
     });
@@ -95,6 +97,7 @@ const yahooChartSchema = z.object({
         regularMarketPrice: z.number().finite().positive(),
         regularMarketTime: z.number().int().positive(),
         previousClose: nullableNumber,
+        chartPreviousClose: nullableNumber,
       }),
       timestamp: z.array(z.number().int().positive()),
       indicators: z.object({ quote: z.array(z.object({ close: z.array(nullableNumber) })).min(1) }),
@@ -102,7 +105,7 @@ const yahooChartSchema = z.object({
   }),
 });
 
-export function normalizeYahooFiveYears(value: unknown, symbol: string, yahooSymbol: string): MarketQuote {
+export function normalizeYahoo(value: unknown, symbol: string, yahooSymbol: string, period: Period): MarketQuote {
   const row = yahooChartSchema.parse(value).chart.result[0]!;
   if (row.meta.symbol !== yahooSymbol) throw new Error("Unexpected symbol");
   const points = new Map<number, number>();
@@ -111,8 +114,8 @@ export function normalizeYahooFiveYears(value: unknown, symbol: string, yahooSym
     if (price != null && price > 0) points.set(timestamp * 1000, price);
   });
   if (points.size < 2) throw new Error("Insufficient history");
-  const previousClose = row.meta.previousClose != null && row.meta.previousClose > 0
-    ? row.meta.previousClose : null;
+  const previous = row.meta.previousClose ?? (period === "1d" ? row.meta.chartPreviousClose : null);
+  const previousClose = previous != null && previous > 0 ? previous : null;
   const change = previousClose === null ? null : row.meta.regularMarketPrice - previousClose;
   return {
     symbol,
@@ -125,8 +128,8 @@ export function normalizeYahooFiveYears(value: unknown, symbol: string, yahooSym
     quotedAt: new Date(row.meta.regularMarketTime * 1000).toISOString(),
     fetchedAt: new Date().toISOString(),
     source: "Yahoo Finance",
-    period: "5y",
-    interval: "1d",
+    period,
+    interval: period === "max" ? "1mo" : periods[period].interval,
     history: [...points].sort(([a], [b]) => a - b).map(([time, price]) => ({ time, price })),
   };
 }

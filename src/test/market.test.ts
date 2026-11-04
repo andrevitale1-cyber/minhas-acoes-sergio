@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { afterEach, expect, it, vi } from "vitest";
-import { handleMarketRequest, normalizeQuote, normalizeTwelve, normalizeYahooFiveYears } from "@/server/market.server";
+import { handleMarketRequest, normalizeQuote, normalizeTwelve, normalizeYahoo } from "@/server/market.server";
 vi.mock("@/lib/market-status", () => ({ marketDataPaused: false }));
 
 afterEach(() => {
@@ -29,6 +29,28 @@ const yahooSample = {
   }] },
 };
 
+it.each([
+  ["1d", "5m"], ["5d", "30m"], ["1mo", "1d"],
+  ["6mo", "1d"], ["1y", "1d"], ["max", "1mo"],
+])("falls back with the correct range and interval for %s", async (period, interval) => {
+  vi.stubEnv("BRAPI_TOKEN", "test-private-token");
+  const upstream = vi.fn()
+    .mockResolvedValueOnce(Response.json({ code: "INVALID_RANGE" }, { status: 400 }))
+    .mockResolvedValueOnce(Response.json({ results: [{ ...sample, symbol: "RADL3", historicalDataPrice: [] }] }))
+    .mockResolvedValueOnce(Response.json(yahooSample));
+  vi.stubGlobal("fetch", upstream);
+  const response = await handleMarketRequest(new Request(`https://site/api/market?symbol=RADL3&period=${period}`));
+  expect(await response.json()).toMatchObject({ period, interval, source: "Yahoo Finance" });
+  expect(String(upstream.mock.calls[2]![0])).toContain(`range=${period}&interval=${interval}`);
+});
+
+it("uses the session previous close for the daily fallback, not the start of a long history", () => {
+  const data = structuredClone(yahooSample);
+  Object.assign(data.chart.result[0]!.meta, { chartPreviousClose: 25 });
+  expect(normalizeYahoo(data, "RADL3", "RADL3.SA", "1d")).toMatchObject({ previousClose: 25, change: 5, changePct: 20 });
+  expect(normalizeYahoo(data, "RADL3", "RADL3.SA", "max").previousClose).toBeNull();
+});
+
 it("uses a complete Yahoo snapshot for 5A when brapi blocks the range", async () => {
   vi.stubEnv("BRAPI_TOKEN", "test-private-token");
   const upstream = vi.fn()
@@ -53,10 +75,10 @@ it("does not call an alternative provider when brapi supplies 5A", async () => {
 });
 
 it("rejects Yahoo history for a different issuer or insufficient valid prices", () => {
-  expect(() => normalizeYahooFiveYears(yahooSample, "VALE3", "VALE3.SA")).toThrow();
+  expect(() => normalizeYahoo(yahooSample, "VALE3", "VALE3.SA", "5y")).toThrow();
   const invalid = structuredClone(yahooSample);
   invalid.chart.result[0]!.indicators.quote[0]!.close = [null];
-  expect(() => normalizeYahooFiveYears(invalid, "RADL3", "RADL3.SA")).toThrow();
+  expect(() => normalizeYahoo(invalid, "RADL3", "RADL3.SA", "5y")).toThrow();
 });
 
 it("keeps the primary quote if the alternative provider fails", async () => {
@@ -112,13 +134,13 @@ it("validates period and ticker before contacting the supplier", async () => {
   expect(upstream).not.toHaveBeenCalled();
 });
 
-it("returns a controlled error for assets without credentials", async () => {
+it("returns a controlled error when credentials and alternative data are unavailable", async () => {
   vi.stubEnv("BRAPI_TOKEN", "");
-  const upstream = vi.fn();
+  const upstream = vi.fn().mockRejectedValue(new Error("Unavailable"));
   vi.stubGlobal("fetch", upstream);
   const response = await handleMarketRequest(new Request("https://site/api/market?symbol=WEGE3"));
   expect(response.status).toBe(503);
-  expect(upstream).not.toHaveBeenCalled();
+  expect(upstream).toHaveBeenCalledTimes(1);
 });
 
 it("keeps the token in upstream headers and caches successful public quotes", async () => {
